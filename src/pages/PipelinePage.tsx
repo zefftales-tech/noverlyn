@@ -168,7 +168,12 @@ export const PipelinePage: React.FC = () => {
     } catch (err: unknown) {
       // Rollback on failure
       setLeads(previousLeads)
-      alert(err instanceof Error ? err.message : 'Failed to update pipeline stage')
+      console.error('[Pipeline Stage Change Error]', err)
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : (err as { message?: string })?.message || 'Failed to update pipeline stage'
+      setError(errorMessage)
     }
   }
 

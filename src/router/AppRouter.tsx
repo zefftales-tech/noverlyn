@@ -1,10 +1,13 @@
 import React, { Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MissingConfigError } from '../components/ui/MissingConfigError'
 import { AppLayout } from '../components/layout/AppLayout'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { LoadingState } from '../components/ui/LoadingState'
+
+import { useAuth } from '../hooks/useAuth'
+import { useWorkspace } from '../hooks/useWorkspace'
 
 import { LoginPage } from '../pages/auth/LoginPage'
 import { SignupPage } from '../pages/auth/SignupPage'
@@ -14,6 +17,7 @@ import { AcceptInvitePage } from '../pages/auth/AcceptInvitePage'
 import { PrivacyPage } from '../pages/legal/PrivacyPage'
 import { TermsPage } from '../pages/legal/TermsPage'
 
+import { OnboardingWizard } from '../pages/onboarding/OnboardingWizard'
 import { DashboardPage } from '../pages/dashboard/DashboardPage'
 import { WorkQueuePage } from '../pages/WorkQueuePage'
 import { InboxLeadsPage } from '../pages/leads/InboxLeadsPage'
@@ -25,6 +29,29 @@ import { TeamPage } from '../pages/TeamPage'
 import { InsightsPage } from '../pages/InsightsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+
+const OnboardingRoute: React.FC = () => {
+  const { user, loading: authLoading } = useAuth()
+  const { currentWorkspace, loading: wsLoading } = useWorkspace()
+
+  if (authLoading || wsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
+        <LoadingState label="Loading workspace..." />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (currentWorkspace) {
+    return <Navigate to="/" replace />
+  }
+
+  return <OnboardingWizard />
+}
 
 export const AppRouter: React.FC = () => {
   if (!isSupabaseConfigured) {
@@ -44,6 +71,9 @@ export const AppRouter: React.FC = () => {
 
         {/* INVITATION ACCEPTANCE ROUTE */}
         <Route path="/invite/:token" element={<AcceptInvitePage />} />
+
+        {/* ONBOARDING ROUTE */}
+        <Route path="/onboarding" element={<OnboardingRoute />} />
 
         {/* PROTECTED AUTHENTICATED APP ROUTES */}
         <Route
