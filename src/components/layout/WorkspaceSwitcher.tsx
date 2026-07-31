@@ -29,15 +29,15 @@ export const WorkspaceSwitcher: React.FC = () => {
     <Dropdown
       align="left"
       trigger={
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-surface-border text-xs font-medium text-navy-900 transition-colors">
-          <Building2 className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-          <span className="truncate max-w-[140px] font-semibold">{currentWorkspace.name}</span>
+        <button className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50/90 hover:bg-slate-100/90 border border-surface-border/80 text-xs font-medium text-navy-900 transition-all duration-150 shadow-2xs">
+          <Building2 className="w-4 h-4 text-brand-blue shrink-0" />
+          <span className="truncate max-w-[140px] font-bold text-navy-900">{currentWorkspace.name}</span>
           {currentRole && (
-            <span className="uppercase text-[9px] font-bold px-1.5 py-0.2 rounded bg-navy-900 text-white shrink-0">
+            <span className="uppercase text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-navy-900 text-white shrink-0 tracking-wider">
               {currentRole}
             </span>
           )}
-          <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0" />
+          <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0 ml-0.5" />
         </button>
       }
       items={items}

@@ -4,6 +4,7 @@ import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { LoadingState } from '../../components/ui/LoadingState'
+import { Avatar } from '../../components/ui/Avatar'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { supabase } from '../../lib/supabase'
 import {
@@ -11,56 +12,47 @@ import {
   type AttentionItem,
   getUrgencyBadgeVariant
 } from '../../lib/attentionEngine'
+import { getTemplateForBusinessType } from '../../lib/templates'
 import type { Database } from '../../types/database.types'
 
 import {
-  AlertTriangle,
   Clock,
   Flame,
   UserX,
   TrendingUp,
   ArrowUpRight,
-  ShieldCheck,
   CheckCircle2,
-  PhoneCall
+  PhoneCall,
+  Activity,
+  AlertCircle,
+  Users,
+  Check,
+  GitPullRequest
 } from 'lucide-react'
 import { FirstRunChecklist } from '../../components/dashboard/FirstRunChecklist'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 
 export const DashboardPage: React.FC = () => {
-  const { currentWorkspace, currentRole } = useWorkspace()
+  const { currentWorkspace } = useWorkspace()
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
-
-  // Canonical Attention Items
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([])
-
-  // Factual Stage & Team & Lost counts
-  const [stageCounts, setStageCounts] = useState<Record<string, number>>({
-    new: 0,
-    contacted: 0,
-    qualified: 0,
-    property_shared: 0,
-    viewing_scheduled: 0,
-    negotiation: 0,
-    won: 0,
-    lost: 0,
-  })
+  const [stageCounts, setStageCounts] = useState<Record<string, number>>({})
   const [teamStats, setTeamStats] = useState<Array<{ name: string; activeCount: number }>>([])
   const [lostCount, setLostCount] = useState<number>(0)
   const [lostReasons, setLostReasons] = useState<Record<string, number>>({})
   const [highValueThreshold, setHighValueThreshold] = useState<number | null>(null)
 
-  const isOwnerOrManager = currentRole === 'owner' || currentRole === 'manager'
+  const activeTemplate = getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type)
 
   const fetchDashboardData = useCallback(async () => {
     if (!currentWorkspace || !supabase) return
     setLoading(true)
 
     try {
-      // 1. Fetch Canonical Attention Items from SQL Engine
+      // 1. Fetch Attention Items
       const items = await fetchWorkspaceAttentionItems(currentWorkspace.id)
       setAttentionItems(items)
 
@@ -82,23 +74,21 @@ export const DashboardPage: React.FC = () => {
 
       const leadsList = (allLeads || []) as Lead[]
 
-      const sCounts: Record<string, number> = {
-        new: 0,
-        contacted: 0,
-        qualified: 0,
-        property_shared: 0,
-        viewing_scheduled: 0,
-        negotiation: 0,
-        won: 0,
-        lost: 0,
-      }
+      const sCounts: Record<string, number> = {}
+      activeTemplate.stages.forEach((stg) => {
+        sCounts[stg.key] = 0
+      })
+
       let lostTotal = 0
       const lostReasonsMap: Record<string, number> = {}
 
       leadsList.forEach((l) => {
         if (sCounts[l.stage] !== undefined) {
           sCounts[l.stage] += 1
+        } else {
+          sCounts[l.stage] = (sCounts[l.stage] || 0) + 1
         }
+
         if (l.stage === 'lost' || l.status === 'lost') {
           lostTotal += 1
           if (l.lost_reason) {
@@ -136,7 +126,7 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace])
+  }, [currentWorkspace, activeTemplate])
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -149,227 +139,187 @@ export const DashboardPage: React.FC = () => {
   }, [fetchDashboardData])
 
   if (loading) {
-    return <Card><LoadingState label="Loading real-time command metrics..." /></Card>
+    return <Card><LoadingState label="Loading overview metrics..." /></Card>
   }
 
-  // Calculate distinct lead counts directly from Canonical Attention Items
+  // Calculate metrics
   const overdueCount = attentionItems.filter((i) => i.primary_issue === 'overdue_follow_up').length
   const dueTodayCount = attentionItems.filter((i) => i.primary_issue === 'due_today').length
   const hotRiskCount = attentionItems.filter((i) => i.primary_issue === 'hot_lead_inactive').length
   const unassignedCount = attentionItems.filter((i) => i.primary_issue === 'unassigned_lead').length
   const highValueRiskCount = attentionItems.filter((i) => i.primary_issue === 'high_value_at_risk').length
-  const negotiationNoActionCount = attentionItems.filter((i) => i.primary_issue === 'negotiation_no_action').length
+
+  const totalActiveLeads = Object.values(stageCounts).reduce((acc, c) => acc + c, 0) || 1
+  const maxTeamLeads = Math.max(...teamStats.map((t) => t.activeCount), 1)
 
   return (
-    <div className="space-y-8">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-surface-border">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading font-bold text-2xl text-navy-900">
-              {isOwnerOrManager ? 'Lead Operations Command' : 'Your Attention Today'}
-            </h1>
-            <Badge variant="success" className="uppercase tracking-wider text-[10px] font-bold">Phase 3 Operational Engine</Badge>
-          </div>
-          <p className="text-xs text-content-secondary mt-1">
-            Real-time deterministic attention metrics for <span className="font-semibold text-navy-900">{currentWorkspace?.name}</span>
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-content-secondary bg-surface-card px-3 py-1.5 rounded-lg border border-surface-border">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Tenant Scope: <strong className="text-navy-900 font-semibold">{currentWorkspace?.slug}</strong></span>
-          <span className="text-slate-300">•</span>
-          <span>Role: <strong className="text-navy-900 font-semibold uppercase">{currentRole}</strong></span>
-        </div>
+    <div className="space-y-7 max-w-[1600px] mx-auto px-1 sm:px-2">
+      {/* A. PAGE HEADER */}
+      <div className="pb-3 border-b border-surface-border/60">
+        <h1 className="font-heading font-bold text-3xl text-navy-900 tracking-tight">
+          Operations Overview
+        </h1>
+        <p className="text-sm text-content-secondary mt-1">
+          See what needs attention, how your pipeline is moving, and where your team should focus today.
+        </p>
       </div>
 
       {/* FIRST-RUN ONBOARDING CHECKLIST */}
       <FirstRunChecklist />
 
-      {/* SECTION 1: NEEDS ATTENTION (Clickable Cards -> Navigates to Work Queue with Filter) */}
+      {/* B. KPI ROW (5 PREMIUM CARDS) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-status-warning" />
-            <h2 className="font-heading font-bold text-base text-navy-900">Needs Attention Today</h2>
+            <Activity className="w-4 h-4 text-brand-blue" />
+            <h2 className="font-heading font-bold text-lg text-navy-900">Needs Attention Today</h2>
           </div>
-          <span className="text-[11px] text-content-muted">Canonical Deterministic Risk Overview</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Card 1: Overdue Follow-ups */}
           <div
             onClick={() => navigate('/work-queue?filter=overdue')}
-            className="bg-surface-card p-4 rounded-xl border border-surface-border space-y-2 hover:border-brand-blue cursor-pointer transition-colors group shadow-2xs"
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-red-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
           >
-            <div className="flex items-center justify-between text-content-muted">
-              <span className="text-xs font-semibold group-hover:text-brand-blue transition-colors">Overdue Follow-ups</span>
-              <Clock className="w-4 h-4 text-status-critical" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Overdue Follow-ups</span>
+              <div className="w-9 h-9 rounded-xl bg-red-50 text-status-critical flex items-center justify-center shrink-0">
+                <Clock className="w-4.5 h-4.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold font-heading text-navy-900">{overdueCount}</div>
-            <p className="text-[11px] text-content-muted">Leads with past scheduled actions</p>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{overdueCount}</div>
+            <p className="text-xs text-content-secondary">
+              {overdueCount > 0 ? `${overdueCount} overdue actions` : 'No overdue actions'}
+            </p>
           </div>
 
           {/* Card 2: Due Today */}
           <div
             onClick={() => navigate('/work-queue?filter=due_today')}
-            className="bg-surface-card p-4 rounded-xl border border-surface-border space-y-2 hover:border-brand-blue cursor-pointer transition-colors group shadow-2xs"
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-brand-blue/40 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
           >
-            <div className="flex items-center justify-between text-content-muted">
-              <span className="text-xs font-semibold group-hover:text-brand-blue transition-colors">Due Today</span>
-              <CheckCircle2 className="w-4 h-4 text-brand-blue" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Due Today</span>
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-brand-blue flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4.5 h-4.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold font-heading text-navy-900">{dueTodayCount}</div>
-            <p className="text-[11px] text-content-muted">Due later today (excl. overdue)</p>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{dueTodayCount}</div>
+            <p className="text-xs text-content-secondary">
+              {dueTodayCount > 0 ? `${dueTodayCount} scheduled today` : 'No tasks due today'}
+            </p>
           </div>
 
           {/* Card 3: Hot Leads At Risk */}
           <div
             onClick={() => navigate('/work-queue?filter=at_risk')}
-            className="bg-surface-card p-4 rounded-xl border border-surface-border space-y-2 hover:border-brand-blue cursor-pointer transition-colors group shadow-2xs"
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-amber-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
           >
-            <div className="flex items-center justify-between text-content-muted">
-              <span className="text-xs font-semibold group-hover:text-brand-blue transition-colors">Hot Leads At Risk</span>
-              <Flame className="w-4 h-4 text-status-warning" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Hot Leads At Risk</span>
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-status-warning flex items-center justify-center shrink-0">
+                <Flame className="w-4.5 h-4.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold font-heading text-navy-900">{hotRiskCount}</div>
-            <p className="text-[11px] text-content-muted">Hot priority leads inactive past SLA</p>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{hotRiskCount}</div>
+            <p className="text-xs text-content-secondary">
+              {hotRiskCount > 0 ? `${hotRiskCount} hot leads inactive` : 'All hot leads active'}
+            </p>
           </div>
 
           {/* Card 4: Unassigned Leads */}
           <div
             onClick={() => navigate('/work-queue?filter=unassigned')}
-            className="bg-surface-card p-4 rounded-xl border border-surface-border space-y-2 hover:border-brand-blue cursor-pointer transition-colors group shadow-2xs"
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-indigo-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
           >
-            <div className="flex items-center justify-between text-content-muted">
-              <span className="text-xs font-semibold group-hover:text-brand-blue transition-colors">Unassigned Leads</span>
-              <UserX className="w-4 h-4 text-slate-500" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Unassigned Leads</span>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <UserX className="w-4.5 h-4.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold font-heading text-navy-900">{unassignedCount}</div>
-            <p className="text-[11px] text-content-muted">Active leads awaiting agent</p>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{unassignedCount}</div>
+            <p className="text-xs text-content-secondary">
+              {unassignedCount > 0 ? `${unassignedCount} awaiting agent` : 'All leads assigned'}
+            </p>
           </div>
 
           {/* Card 5: High-Value At Risk */}
           <div
             onClick={() => navigate('/work-queue?filter=at_risk')}
-            className="bg-surface-card p-4 rounded-xl border border-surface-border space-y-2 hover:border-brand-blue cursor-pointer transition-colors group shadow-2xs"
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-emerald-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
           >
-            <div className="flex items-center justify-between text-content-muted">
-              <span className="text-xs font-semibold group-hover:text-brand-blue transition-colors">High-Value At Risk</span>
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">High-Value At Risk</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4.5 h-4.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold font-heading text-navy-900">{highValueRiskCount}</div>
-            <p className="text-[11px] text-content-muted">
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{highValueRiskCount}</div>
+            <p className="text-xs text-content-secondary">
               {highValueThreshold
                 ? `>= ${currentWorkspace?.currency || 'USD'} ${highValueThreshold.toLocaleString()}`
-                : 'Threshold set in Settings'}
+                : 'High-value deals needing action'}
             </p>
           </div>
         </div>
       </section>
 
-      {/* SECTION 2: OWNER / MANAGER ATTENTION SUMMARY */}
-      {isOwnerOrManager && (
-        <Card title="Manager Attention Summary" subtitle="Factual rule-based operational risks requiring managerial oversight">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 bg-slate-50 border border-surface-border rounded-lg space-y-1">
-              <span className="text-content-secondary font-medium">Unassigned Active Leads</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-bold font-heading text-navy-900">{unassignedCount}</span>
-                <Badge variant={unassignedCount > 0 ? 'warning' : 'neutral'} size="sm">
-                  {unassignedCount > 0 ? 'NEEDS AGENT' : 'OK'}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 border border-surface-border rounded-lg space-y-1">
-              <span className="text-content-secondary font-medium">Overdue Action Items</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-bold font-heading text-navy-900">{overdueCount}</span>
-                <Badge variant={overdueCount > 0 ? 'critical' : 'neutral'} size="sm">
-                  {overdueCount > 0 ? 'ACTION NEEDED' : 'OK'}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 border border-surface-border rounded-lg space-y-1">
-              <span className="text-content-secondary font-medium">Negotiation Missing Next Action</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-bold font-heading text-navy-900">{negotiationNoActionCount}</span>
-                <Badge variant={negotiationNoActionCount > 0 ? 'warning' : 'neutral'} size="sm">
-                  {negotiationNoActionCount > 0 ? 'STALLED' : 'OK'}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 border border-surface-border rounded-lg space-y-1">
-              <span className="text-content-secondary font-medium">High-Value Deals At Risk</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-bold font-heading text-navy-900">{highValueRiskCount}</span>
-                <Badge variant={highValueRiskCount > 0 ? 'critical' : 'neutral'} size="sm">
-                  {highValueRiskCount > 0 ? 'HIGH RISK' : 'OK'}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* SECTION 3: TODAY'S WORK QUEUE PREVIEW */}
+      {/* C. PRIORITY ACTIONS */}
       <Card
-        title="Today's Priority Attention Items"
-        subtitle="Top 6 deterministic attention items requiring immediate resolution"
+        title="Priority Actions"
+        subtitle="The leads and follow-ups that need attention first."
         action={
           <Button variant="primary" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />} onClick={() => navigate('/work-queue')}>
-            Open Daily Work Queue
+            Open Work Queue
           </Button>
         }
       >
         {attentionItems.length === 0 ? (
-          <div className="p-8 text-center text-xs text-content-muted bg-slate-50 border border-dashed border-surface-border rounded-lg">
-            No active attention items requiring action right now.
+          <div className="py-12 text-center text-xs text-content-secondary bg-slate-50/50 border border-dashed border-surface-border rounded-xl">
+            You're all caught up! No priority items currently require attention.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
-                  <th className="p-3">Urgency</th>
-                  <th className="p-3">Lead Name</th>
-                  <th className="p-3">Primary Reason</th>
-                  <th className="p-3">Est. Value</th>
-                  <th className="p-3">Recommended Next Action</th>
-                  <th className="p-3 text-right">Action</th>
+                <tr className="border-b border-surface-border/60 bg-slate-50/60 text-content-secondary font-semibold text-xs">
+                  <th className="py-3.5 px-6">Priority</th>
+                  <th className="py-3.5 px-6">Lead</th>
+                  <th className="py-3.5 px-6">Reason</th>
+                  <th className="py-3.5 px-6">Value</th>
+                  <th className="py-3.5 px-6">Next Action</th>
+                  <th className="py-3.5 px-6 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-border">
+              <tbody className="divide-y divide-surface-border/50">
                 {attentionItems.slice(0, 6).map((item) => (
-                  <tr key={item.lead_id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-3">
+                  <tr key={item.lead_id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-4 px-6">
                       <Badge variant={getUrgencyBadgeVariant(item.urgency_level)} size="sm">
                         {item.urgency_level}
                       </Badge>
                     </td>
 
-                    <td className="p-3 font-bold text-navy-900">
-                      <span onClick={() => navigate(`/leads/${item.lead_id}`)} className="hover:text-brand-blue cursor-pointer">
+                    <td className="py-4 px-6 font-bold text-navy-900">
+                      <span onClick={() => navigate(`/leads/${item.lead_id}`)} className="hover:text-brand-blue cursor-pointer transition-colors">
                         {item.lead_name}
                       </span>
                     </td>
 
-                    <td className="p-3">
+                    <td className="py-4 px-6">
                       <span className="font-semibold text-navy-900">{item.primary_issue_label}</span>
-                      <p className="text-[11px] text-content-muted mt-0.5">{item.primary_issue_detail}</p>
+                      <p className="text-xs text-content-secondary mt-0.5">{item.primary_issue_detail}</p>
                     </td>
 
-                    <td className="p-3 font-medium text-navy-900">
+                    <td className="py-4 px-6 font-semibold text-navy-900">
                       {item.estimated_value ? `${currentWorkspace?.currency || 'USD'} ${item.estimated_value.toLocaleString()}` : '—'}
                     </td>
 
-                    <td className="p-3 font-medium text-content-secondary">{item.next_action}</td>
+                    <td className="py-4 px-6 font-medium text-content-secondary">{item.next_action}</td>
 
-                    <td className="p-3 text-right">
+                    <td className="py-4 px-6 text-right">
                       <Button
                         variant="outline"
                         size="sm"
@@ -387,80 +337,150 @@ export const DashboardPage: React.FC = () => {
         )}
       </Card>
 
-      {/* SECTION 4 & 5: PIPELINE HEALTH & TEAM ACCOUNTABILITY */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* PIPELINE HEALTH */}
-        <Card title="Pipeline Health" subtitle="Real-time count of active leads across deal stages">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { stage: 'New', count: stageCounts.new },
-              { stage: 'Contacted', count: stageCounts.contacted },
-              { stage: 'Qualified', count: stageCounts.qualified },
-              { stage: 'Prop Shared', count: stageCounts.property_shared },
-              { stage: 'Viewing', count: stageCounts.viewing_scheduled },
-              { stage: 'Negotiation', count: stageCounts.negotiation },
-              { stage: 'Won', count: stageCounts.won },
-              { stage: 'Lost', count: stageCounts.lost },
-            ].map((item, i) => (
-              <div key={i} className="p-3 bg-slate-50 border border-surface-border rounded-lg text-center space-y-1">
-                <span className="text-[11px] font-semibold text-content-secondary uppercase block truncate">{item.stage}</span>
-                <span className="text-xl font-bold font-heading text-navy-900 block">{item.count}</span>
-              </div>
-            ))}
+      {/* D. PIPELINE OVERVIEW (2-COLUMN COMPACT GRID) + TEAM WORKLOAD */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        {/* PIPELINE OVERVIEW */}
+        <Card
+          title="Pipeline Overview"
+          subtitle="Dynamic stage distribution across active opportunities"
+          action={
+            <Button variant="ghost" size="sm" icon={<GitPullRequest className="w-3.5 h-3.5" />} onClick={() => navigate('/pipeline')}>
+              Kanban Board
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            {/* Segmented Pipeline Bar */}
+            <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex gap-0.5 p-0.5 border border-surface-border/60">
+              {activeTemplate.stages.map((stg) => {
+                const count = stageCounts[stg.key] || 0
+                const pct = Math.round((count / totalActiveLeads) * 100)
+                if (pct === 0) return null
+
+                let barColor = 'bg-brand-blue'
+                if (stg.key === 'won') barColor = 'bg-emerald-500'
+                if (stg.key === 'lost') barColor = 'bg-red-400'
+
+                return (
+                  <div
+                    key={stg.key}
+                    style={{ width: `${pct}%` }}
+                    className={`${barColor} h-full first:rounded-l-full last:rounded-r-full transition-all duration-300`}
+                    title={`${stg.label}: ${count} (${pct}%)`}
+                  />
+                )
+              })}
+            </div>
+
+            {/* 2-Column Compact Stage Grid on Desktop */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {activeTemplate.stages.map((stg) => {
+                const count = stageCounts[stg.key] || 0
+                const pct = Math.round((count / totalActiveLeads) * 100)
+
+                return (
+                  <div key={stg.key} className="p-2.5 bg-slate-50/60 border border-surface-border/40 rounded-xl flex items-center justify-between hover:bg-slate-100/60 transition-colors">
+                    <span className="text-xs font-semibold text-navy-900 truncate pr-2">{stg.label}</span>
+                    <span className="text-xs font-bold text-navy-900 bg-white px-2 py-0.5 rounded-lg border border-surface-border/60 shrink-0">
+                      {count} <span className="text-content-secondary font-normal text-[11px]">· {pct}%</span>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </Card>
 
-        {/* TEAM ACCOUNTABILITY */}
-        <Card title="Team Assignment Overview" subtitle="Factual count of active leads assigned per agent">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-surface-border text-content-secondary font-semibold uppercase text-[10px]">
-                  <th className="pb-2">Agent Name</th>
-                  <th className="pb-2 text-right">Active Assigned Leads</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-border">
-                {teamStats.map((ts, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-2.5 font-medium text-navy-900">{ts.name}</td>
-                    <td className="py-2.5 text-right font-bold text-navy-900">{ts.activeCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* TEAM WORKLOAD */}
+        <Card
+          title="Team Workload"
+          subtitle="Active leads assigned per active team member"
+          action={
+            <Button variant="ghost" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />} onClick={() => navigate('/team')}>
+              View Team
+            </Button>
+          }
+        >
+          {teamStats.length === 0 ? (
+            <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-center text-xs p-4 bg-slate-50/40 border border-surface-border/40 rounded-xl space-y-2">
+              <Users className="w-6 h-6 text-content-muted" />
+              <p className="font-bold text-navy-900 text-sm">No team workload yet</p>
+              <p className="text-content-secondary max-w-xs">Assign leads to team members to start tracking workload.</p>
+              <div className="pt-1">
+                <Button variant="outline" size="sm" onClick={() => navigate('/team')}>
+                  View Team
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {teamStats.map((ts, idx) => {
+                const pct = Math.round((ts.activeCount / maxTeamLeads) * 100)
+                return (
+                  <div key={idx} className="p-3 bg-slate-50/60 border border-surface-border/40 rounded-xl space-y-2 hover:bg-slate-100/60 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={ts.name} size="sm" />
+                        <span className="font-semibold text-xs text-navy-900">{ts.name}</span>
+                      </div>
+                      <span className="text-xs font-bold text-navy-900">{ts.activeCount} Active Leads</span>
+                    </div>
+                    <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-brand-blue h-full rounded-full transition-all duration-300"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* SECTION 6: LOST LEAD INTELLIGENCE */}
-      <Card title="Lost Lead Intelligence" subtitle="Root-cause analysis of why property deals die">
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-slate-50 border border-surface-border rounded-lg gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-white border border-surface-border rounded-lg text-status-critical">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-heading font-semibold text-sm text-navy-900">Total Lost Deals Recorded</h4>
-                <p className="text-xs text-content-secondary">Captured via mandatory mark lost reason modal.</p>
-              </div>
-            </div>
-            <Badge variant="critical" className="font-bold text-sm px-3 py-1">{lostCount} Lost Deals</Badge>
+      {/* E. LOST OPPORTUNITIES */}
+      {lostCount === 0 ? (
+        <div className="bg-surface-card border border-surface-border/80 rounded-2xl p-5 shadow-saas flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+            <Check className="w-5 h-5" />
           </div>
-
-          {Object.keys(lostReasons).length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              {Object.entries(lostReasons).map(([reason, count]) => (
-                <div key={reason} className="p-3 bg-red-50/50 border border-red-200 rounded-lg text-center space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-red-700 block truncate">{reason.replace('_', ' ')}</span>
-                  <span className="text-lg font-bold text-navy-900 block">{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div>
+            <h4 className="font-heading font-bold text-sm text-navy-900">No lost opportunities recorded</h4>
+            <p className="text-xs text-content-secondary mt-0.5">
+              Lost deal intelligence and root-cause metrics will appear here once a deal is marked lost.
+            </p>
+          </div>
         </div>
-      </Card>
+      ) : (
+        <Card title="Lost Opportunities" subtitle="Root-cause metrics for lost deals">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-slate-50/80 border border-surface-border/60 rounded-xl gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-white border border-surface-border rounded-xl text-status-critical shadow-2xs">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-heading font-semibold text-sm text-navy-900">Total Lost Deals</h4>
+                  <p className="text-xs text-content-secondary">Recorded from mandatory loss reasons.</p>
+                </div>
+              </div>
+              <Badge variant="critical" className="font-bold text-sm px-3 py-1">{lostCount} Lost Deals</Badge>
+            </div>
+
+            {Object.keys(lostReasons).length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                {Object.entries(lostReasons).map(([reason, count]) => (
+                  <div key={reason} className="p-3.5 bg-red-50/40 border border-red-200/80 rounded-xl text-center space-y-1">
+                    <span className="text-xs font-semibold text-red-700 block truncate">{reason.replace('_', ' ')}</span>
+                    <span className="text-xl font-bold text-navy-900 block">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

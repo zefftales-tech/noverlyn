@@ -109,12 +109,12 @@ export const TeamPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-surface-border">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <h1 className="font-heading font-bold text-2xl text-navy-900">Team Operations</h1>
-            <Badge variant="blue" className="font-bold">{activeMembers.length} Active Members</Badge>
+            <Badge variant="blue" className="font-bold px-2.5 py-0.5">{activeMembers.length} Active</Badge>
           </div>
           <p className="text-xs text-content-secondary mt-1">
-            Workspace access control, role permissions, and factual workload distribution for <span className="font-semibold text-navy-900">{currentWorkspace?.name}</span>
+            Workspace access control, role permissions, and workload distribution for <span className="font-semibold text-navy-900">{currentWorkspace?.name}</span>
           </p>
         </div>
 
@@ -126,7 +126,7 @@ export const TeamPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-3 bg-status-critical-bg border border-red-200 rounded-lg text-xs text-status-critical flex items-start gap-2">
+        <div className="p-3 bg-status-critical-bg border border-red-200 rounded-xl text-xs text-status-critical flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <strong className="block font-bold">Team Operations Alert</strong>
@@ -135,14 +135,14 @@ export const TeamPage: React.FC = () => {
         </div>
       )}
 
-      {/* TABS */}
-      <div className="border-b border-surface-border flex gap-4 sm:gap-6 overflow-x-auto text-xs font-semibold select-none no-scrollbar">
+      {/* Modern Filter Tabs Bar */}
+      <div className="bg-surface-card p-1.5 rounded-xl border border-surface-border flex gap-1.5 overflow-x-auto text-xs font-semibold select-none no-scrollbar shadow-2xs">
         <button
           onClick={() => setActiveTab('active')}
-          className={`pb-3 border-b-2 whitespace-nowrap transition-all ${
+          className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 text-xs font-medium ${
             activeTab === 'active'
-              ? 'border-brand-blue text-brand-blue font-bold'
-              : 'border-transparent text-content-secondary hover:text-navy-900'
+              ? 'bg-navy-900 text-white shadow-xs font-semibold'
+              : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
           }`}
         >
           ACTIVE MEMBERS ({activeMembers.length})
@@ -150,10 +150,10 @@ export const TeamPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('disabled')}
-          className={`pb-3 border-b-2 whitespace-nowrap transition-all ${
+          className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 text-xs font-medium ${
             activeTab === 'disabled'
-              ? 'border-brand-blue text-brand-blue font-bold'
-              : 'border-transparent text-content-secondary hover:text-navy-900'
+              ? 'bg-navy-900 text-white shadow-xs font-semibold'
+              : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
           }`}
         >
           DISABLED ({disabledMembers.length})
@@ -161,10 +161,10 @@ export const TeamPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('former')}
-          className={`pb-3 border-b-2 whitespace-nowrap transition-all ${
+          className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 text-xs font-medium ${
             activeTab === 'former'
-              ? 'border-brand-blue text-brand-blue font-bold'
-              : 'border-transparent text-content-secondary hover:text-navy-900'
+              ? 'bg-navy-900 text-white shadow-xs font-semibold'
+              : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
           }`}
         >
           FORMER MEMBERS ({formerMembers.length})
@@ -172,10 +172,10 @@ export const TeamPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('invitations')}
-          className={`pb-3 border-b-2 whitespace-nowrap transition-all ${
+          className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 text-xs font-medium ${
             activeTab === 'invitations'
-              ? 'border-brand-blue text-brand-blue font-bold'
-              : 'border-transparent text-content-secondary hover:text-navy-900'
+              ? 'bg-navy-900 text-white shadow-xs font-semibold'
+              : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
           }`}
         >
           PENDING INVITATIONS ({invitations.length})
@@ -207,7 +207,7 @@ export const TeamPage: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-surface-border bg-slate-50/80 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
                       <th className="p-3.5">Member</th>
                       <th className="p-3.5">Role</th>
                       <th className="p-3.5">Status</th>
@@ -315,7 +315,7 @@ export const TeamPage: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-surface-border bg-slate-50/80 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
                       <th className="p-3.5">Member</th>
                       <th className="p-3.5">Role</th>
                       <th className="p-3.5">Status</th>
@@ -398,7 +398,7 @@ export const TeamPage: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-surface-border bg-slate-50/80 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
                       <th className="p-3.5">Former Member</th>
                       <th className="p-3.5">Prior Role</th>
                       <th className="p-3.5">Status</th>
@@ -470,7 +470,7 @@ export const TeamPage: React.FC = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-surface-border bg-slate-50/80 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
                       <th className="p-3.5">Invited Email</th>
                       <th className="p-3.5">Intended Role</th>
                       <th className="p-3.5">Invited Date</th>

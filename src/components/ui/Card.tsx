@@ -25,9 +25,9 @@ export const Card: React.FC<CardProps> = ({
   }
 
   return (
-    <div className={`bg-surface-card border border-surface-border rounded-xl shadow-xs ${className}`}>
+    <div className={`bg-surface-card border border-surface-border/80 rounded-2xl shadow-saas ${className}`}>
       {(title || action) && (
-        <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between">
+        <div className="px-6 py-4.5 border-b border-surface-border/60 flex items-center justify-between">
           <div>
             {title && <h3 className="font-heading font-bold text-base text-navy-900">{title}</h3>}
             {subtitle && <p className="text-xs text-content-secondary mt-0.5">{subtitle}</p>}

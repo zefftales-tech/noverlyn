@@ -34,29 +34,29 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   return (
     <div
       ref={setNodeRef}
-      className={`w-72 shrink-0 bg-slate-50 border rounded-xl flex flex-col max-h-[calc(100vh-220px)] transition-colors ${
-        isOver ? 'border-brand-blue ring-2 ring-blue-100 bg-blue-50/40' : 'border-surface-border'
+      className={`w-72 shrink-0 bg-slate-50/80 border rounded-2xl flex flex-col max-h-[calc(100vh-220px)] transition-all duration-150 ${
+        isOver ? 'border-brand-blue ring-2 ring-blue-100 bg-blue-50/50 shadow-md' : 'border-surface-border'
       }`}
     >
       {/* Column Header */}
-      <div className="p-3.5 border-b border-surface-border bg-white rounded-t-xl flex items-center justify-between">
+      <div className="p-3.5 border-b border-surface-border bg-white rounded-t-2xl flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="font-heading font-bold text-xs uppercase text-navy-900 tracking-wider">{title}</h3>
-            <span className="bg-slate-100 text-navy-900 text-[11px] font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-slate-100 text-navy-900 text-[11px] font-bold px-2 py-0.5 rounded-full border border-surface-border">
               {leads.length}
             </span>
           </div>
-          <span className="text-[11px] text-content-muted block mt-0.5 font-medium">
+          <span className="text-[11px] text-content-muted block mt-1 font-semibold">
             {currency} {totalValue.toLocaleString()}
           </span>
         </div>
       </div>
 
       {/* Column Cards Container */}
-      <div className="p-3 flex-1 overflow-y-auto space-y-3 min-h-[150px]">
+      <div className="p-3 flex-1 overflow-y-auto space-y-3 min-h-[150px] no-scrollbar">
         {leads.length === 0 ? (
-          <div className="h-28 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-content-muted font-medium">
+          <div className="h-28 border border-dashed border-slate-200 rounded-xl flex items-center justify-center text-xs text-content-muted font-medium bg-white/40">
             No leads in this stage
           </div>
         ) : (

@@ -20,8 +20,8 @@ export default {
         surface: {
           bg: '#F8FAFC',
           card: '#FFFFFF',
-          border: '#CBD5E1',
-          muted: '#E2E8F0',
+          border: '#E2E8F0',
+          muted: '#F1F5F9',
         },
         content: {
           primary: '#0F172A',
@@ -36,6 +36,9 @@ export default {
           critical: '#DC2626',
           'critical-bg': '#FEF2F2',
         }
+      },
+      boxShadow: {
+        'saas': '0 1px 2px rgba(15,23,42,0.03), 0 6px 18px rgba(15,23,42,0.04)',
       },
       fontFamily: {
         heading: ['Manrope', 'sans-serif'],

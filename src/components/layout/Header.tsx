@@ -8,6 +8,7 @@ import { AddLeadModal } from '../leads/AddLeadModal'
 import { SearchModal } from '../ui/SearchModal'
 import { SendFeedbackModal } from '../ui/SendFeedbackModal'
 import { NotificationCenter } from './NotificationCenter'
+import { NoverlynLogo } from '../ui/NoverlynLogo'
 import { Search, Plus, Menu, LogOut, User, Shield, MessageSquare } from 'lucide-react'
 
 export interface HeaderProps {
@@ -46,24 +47,28 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
             <Menu className="w-5 h-5" />
           </button>
 
+          <div className="lg:hidden">
+            <NoverlynLogo variant="mark" size="sm" />
+          </div>
+
           <WorkspaceSwitcher />
         </div>
 
         {/* Center: Global Search Bar */}
-        <div className="hidden md:flex items-center max-w-md w-full mx-4">
+        <div className="hidden md:flex items-center max-w-lg w-full mx-6">
           <div className="relative w-full">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-content-muted">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-content-muted">
               <Search className="w-4 h-4" />
             </div>
             <input
               type="text"
-              placeholder="Search leads, phone numbers, email... (Ctrl + K)"
+              placeholder="Search leads, phone numbers, contacts... (Ctrl + K)"
               readOnly
               onClick={() => setIsSearchOpen(true)}
-              className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-surface-border bg-slate-50 text-xs text-content-secondary placeholder:text-content-muted cursor-pointer hover:bg-white hover:border-slate-400 transition-colors focus:outline-none"
+              className="w-full pl-10 pr-12 py-2 rounded-xl border border-surface-border/80 bg-slate-50/80 text-xs text-navy-900 placeholder:text-content-muted cursor-pointer hover:bg-white hover:border-slate-300 transition-all duration-150 shadow-2xs focus:outline-none"
             />
-            <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-              <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-content-muted bg-white border border-surface-border rounded shadow-2xs">
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-content-muted bg-white border border-surface-border rounded-md shadow-2xs">
                 Ctrl K
               </kbd>
             </div>

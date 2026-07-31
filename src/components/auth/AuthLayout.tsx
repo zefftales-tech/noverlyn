@@ -1,6 +1,6 @@
 import React from 'react'
-import { Building2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { NoverlynLogo } from '../ui/NoverlynLogo'
 
 export interface AuthLayoutProps {
   children: React.ReactNode
@@ -14,14 +14,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         {/* Noverlyn Brand Header */}
         <div className="inline-flex flex-col items-center space-y-2 mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-navy-900 flex items-center justify-center text-white shadow-md">
-              <Building2 className="w-5 h-5 text-brand-blue" />
-            </div>
-            <span className="font-heading font-extrabold text-2xl tracking-tight text-navy-900">
-              NOVERLYN
-            </span>
-          </div>
+          <NoverlynLogo variant="light" size="lg" />
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-surface-border text-[11px] font-semibold text-content-secondary uppercase tracking-wider">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-blue" />
             Business Operations Platform

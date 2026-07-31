@@ -3,7 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { Avatar } from '../ui/Avatar'
-import { Badge } from '../ui/Badge'
 import {
   Home,
   CheckSquare,
@@ -17,11 +16,11 @@ import {
   Inbox,
   List,
   Upload,
-  Building2,
   X
 } from 'lucide-react'
 
 import { getTemplateForBusinessType } from '../../lib/templates'
+import { NoverlynLogo } from '../ui/NoverlynLogo'
 
 export interface SidebarProps {
   mobileOpen?: boolean
@@ -62,19 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
       {/* Top Header */}
       <div>
         <div className="p-5 border-b border-navy-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-blue flex items-center justify-center text-white shadow-md">
-              <Building2 className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-heading font-extrabold text-lg text-white tracking-wider block leading-none">
-                NOVERLYN
-              </span>
-              <span className="text-[10px] font-semibold text-slate-400 tracking-wide uppercase">
-                {activeTemplate.title}
-              </span>
-            </div>
-          </div>
+          <NoverlynLogo variant="dark" size="md" sublabel={activeTemplate.title} />
           {mobileOpen && (
             <button onClick={onMobileClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-navy-800 lg:hidden">
               <X className="w-5 h-5" />
@@ -167,22 +154,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
       </div>
 
       {/* Bottom Profile Footer */}
-      <div className="p-3 border-t border-navy-800 bg-navy-900/50">
-        <div className="flex items-center justify-between p-2 rounded-lg bg-navy-800/60 border border-navy-700/50">
+      <div className="p-3 border-t border-navy-800/80 bg-navy-900">
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-navy-800/40 border border-navy-800/70">
           <div className="flex items-center gap-2.5 min-w-0">
             <Avatar name={profile?.full_name || 'User'} url={profile?.avatar_url} size="sm" />
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">{profile?.full_name || 'Agent'}</p>
+              <p className="text-xs font-bold text-white truncate leading-tight">{profile?.full_name || 'Agent'}</p>
               {currentRole && (
-                <Badge variant="blue" size="sm" className="mt-0.5 uppercase tracking-wider text-[9px] px-1.5 py-0">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mt-0.5">
                   {currentRole}
-                </Badge>
+                </span>
               )}
             </div>
           </div>
           <button
             onClick={() => signOut()}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-status-critical hover:bg-navy-700 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-status-critical hover:bg-navy-800 transition-colors"
             title="Sign Out"
           >
             <LogOut className="w-4 h-4" />

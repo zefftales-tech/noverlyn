@@ -29,7 +29,8 @@ import {
   PhoneCall,
   Calendar,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react'
 
 type Lead = Database['public']['Tables']['leads']['Row']
@@ -114,7 +115,7 @@ export const WorkQueuePage: React.FC = () => {
     return true // 'all'
   })
 
-  // Quick Action Handler helper to construct dummy Lead object for modal
+  // Quick Action Handler helper to construct Lead object for modal
   const makeLeadObject = (item: AttentionItem): Lead => {
     return {
       id: item.lead_id,
@@ -149,7 +150,6 @@ export const WorkQueuePage: React.FC = () => {
     setActiveLead(l)
 
     if (actionType === 'complete') {
-      // Create lightweight dummy follow up for complete modal
       setActiveFollowUp({
         id: 'fu_active',
         workspace_id: item.workspace_id,
@@ -185,12 +185,12 @@ export const WorkQueuePage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-surface-border">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <h1 className="font-heading font-bold text-2xl text-navy-900">Daily Work Queue</h1>
-            <Badge variant="critical" className="font-bold">{attentionItems.length} Needs Attention</Badge>
+            <Badge variant="critical" className="font-bold px-2.5 py-0.5">{attentionItems.length} Items</Badge>
           </div>
           <p className="text-xs text-content-secondary mt-1">
-            Prioritized operational task queue sorted deterministically by urgency and deal value.
+            Prioritized actions and follow-ups organized by urgency and deal value.
           </p>
         </div>
 
@@ -204,24 +204,24 @@ export const WorkQueuePage: React.FC = () => {
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-content-secondary bg-slate-50 px-3 py-1.5 rounded-lg border border-surface-border">
+          <div className="flex items-center gap-2 text-xs text-content-secondary bg-surface-card px-3.5 py-2 rounded-xl border border-surface-border shadow-2xs">
             <ShieldCheck className="w-4 h-4 text-brand-blue" />
-            <span>Agent Scope: <strong className="text-navy-900 font-semibold">Your Assigned Queue</strong></span>
+            <span>Scope: <strong className="text-navy-900 font-semibold">Assigned Queue</strong></span>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="p-3 bg-status-critical-bg border border-red-200 rounded-lg text-xs text-status-critical flex items-start gap-2">
+        <div className="p-3 bg-status-critical-bg border border-red-200 rounded-xl text-xs text-status-critical flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Tabs Bar */}
-      <div className="border-b border-surface-border flex gap-4 overflow-x-auto text-xs font-semibold select-none no-scrollbar">
+      {/* Modern Filter Tabs Bar */}
+      <div className="bg-surface-card p-1.5 rounded-xl border border-surface-border flex gap-1.5 overflow-x-auto text-xs font-semibold select-none no-scrollbar shadow-2xs">
         {[
-          { key: 'all', label: `ALL ATTENTION (${attentionItems.length})` },
+          { key: 'all', label: `ALL (${attentionItems.length})` },
           { key: 'overdue', label: `OVERDUE (${attentionItems.filter((i) => i.primary_issue === 'overdue_follow_up').length})` },
           { key: 'due_today', label: `DUE TODAY (${attentionItems.filter((i) => i.primary_issue === 'due_today').length})` },
           { key: 'at_risk', label: `AT RISK (${attentionItems.filter((i) => ['hot_lead_inactive', 'new_lead_waiting', 'negotiation_no_action', 'high_value_at_risk'].includes(i.primary_issue)).length})` },
@@ -234,10 +234,10 @@ export const WorkQueuePage: React.FC = () => {
               setActiveTab(tab.key)
               setSearchParams({ filter: tab.key })
             }}
-            className={`pb-3 border-b-2 whitespace-nowrap transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 text-xs font-medium ${
               activeTab === tab.key
-                ? 'border-brand-blue text-brand-blue font-bold'
-                : 'border-transparent text-content-secondary hover:text-navy-900'
+                ? 'bg-navy-900 text-white shadow-xs font-semibold'
+                : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
             }`}
           >
             {tab.label}
@@ -252,8 +252,8 @@ export const WorkQueuePage: React.FC = () => {
         <Card>
           <EmptyState
             title="You're all caught up!"
-            description="No property leads currently require attention for this filter category."
-            icon={<CheckCircle2 className="w-10 h-10 text-emerald-600" />}
+            description="No active items currently require attention for this filter category."
+            icon={<Sparkles className="w-10 h-10 text-emerald-600" />}
           />
         </Card>
       ) : (
@@ -262,7 +262,7 @@ export const WorkQueuePage: React.FC = () => {
           <div className="hidden lg:block bg-surface-card border border-surface-border rounded-xl shadow-2xs overflow-hidden">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-surface-border bg-slate-50 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
+                <tr className="border-b border-surface-border bg-slate-50/80 text-content-secondary font-semibold uppercase text-[10px] tracking-wider">
                   <th className="p-3.5">Urgency</th>
                   <th className="p-3.5">Lead Name</th>
                   <th className="p-3.5">Primary Attention Reason</th>
@@ -392,7 +392,7 @@ export const WorkQueuePage: React.FC = () => {
                   <Badge variant={getUrgencyBadgeVariant(item.urgency_level)} className="font-bold">
                     {item.urgency_level} ATTENTION
                   </Badge>
-                  <span className="font-bold text-xs text-navy-900">{item.stage.toUpperCase().replace('_', ' ')}</span>
+                  <span className="font-bold text-xs text-navy-900 uppercase">{item.stage.replace('_', ' ')}</span>
                 </div>
 
                 <div>
@@ -412,6 +412,35 @@ export const WorkQueuePage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
+                  {item.primary_issue === 'overdue_follow_up' || item.primary_issue === 'due_today' ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                      onClick={() => handleQuickAction(item, 'complete')}
+                    >
+                      Complete
+                    </Button>
+                  ) : item.primary_issue === 'new_lead_waiting' ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<PhoneCall className="w-3.5 h-3.5" />}
+                      onClick={() => handleQuickAction(item, 'log_contact')}
+                    >
+                      Log Contact
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<Calendar className="w-3.5 h-3.5" />}
+                      onClick={() => handleQuickAction(item, 'schedule')}
+                    >
+                      Schedule
+                    </Button>
+                  )}
+
                   <Button variant="outline" size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => navigate(`/leads/${item.lead_id}`)}>
                     Open Detail Page
                   </Button>
