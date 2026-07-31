@@ -43,7 +43,7 @@ export const MissingConfigError: React.FC = () => {
         </div>
 
         <div className="pt-2 border-t border-surface-border flex justify-between items-center text-xs text-content-muted">
-          <span>Noverlyn Real Estate Lead OS</span>
+          <span>Noverlyn Business Operations Platform</span>
           <a 
             href="https://supabase.com/docs" 
             target="_blank" 

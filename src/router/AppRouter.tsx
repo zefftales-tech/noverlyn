@@ -1,8 +1,9 @@
 import React, { Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { isSupabaseConfigured } from '../lib/supabase'
+import { MissingConfigError } from '../components/ui/MissingConfigError'
 import { AppLayout } from '../components/layout/AppLayout'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
-import { ErrorBoundary } from '../components/ui/ErrorBoundary'
 import { LoadingState } from '../components/ui/LoadingState'
 
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -26,46 +27,48 @@ import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 
 export const AppRouter: React.FC = () => {
+  if (!isSupabaseConfigured) {
+    return <MissingConfigError />
+  }
+
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<div className="p-12"><LoadingState label="Loading workspace..." /></div>}>
-        <Routes>
-          {/* PUBLIC AUTH & LEGAL ROUTES */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/terms" element={<TermsPage />} />
+    <Suspense fallback={<div className="p-12"><LoadingState label="Loading workspace..." /></div>}>
+      <Routes>
+        {/* PUBLIC AUTH & LEGAL ROUTES */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
 
-          {/* INVITATION ACCEPTANCE ROUTE */}
-          <Route path="/invite/:token" element={<AcceptInvitePage />} />
+        {/* INVITATION ACCEPTANCE ROUTE */}
+        <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
-          {/* PROTECTED AUTHENTICATED APP ROUTES */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/work-queue" element={<WorkQueuePage />} />
-            <Route path="/leads" element={<AllLeadsPage />} />
-            <Route path="/leads/inbox" element={<InboxLeadsPage />} />
-            <Route path="/leads/all" element={<AllLeadsPage />} />
-            <Route path="/leads/import" element={<CsvImportPage />} />
-            <Route path="/leads/:leadId" element={<LeadDetailPage />} />
-            <Route path="/pipeline" element={<PipelinePage />} />
-            <Route path="/team" element={<TeamPage />} />
-            <Route path="/insights" element={<InsightsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
+        {/* PROTECTED AUTHENTICATED APP ROUTES */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/work-queue" element={<WorkQueuePage />} />
+          <Route path="/leads" element={<AllLeadsPage />} />
+          <Route path="/leads/inbox" element={<InboxLeadsPage />} />
+          <Route path="/leads/all" element={<AllLeadsPage />} />
+          <Route path="/leads/import" element={<CsvImportPage />} />
+          <Route path="/leads/:leadId" element={<LeadDetailPage />} />
+          <Route path="/pipeline" element={<PipelinePage />} />
+          <Route path="/team" element={<TeamPage />} />
+          <Route path="/insights" element={<InsightsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
 
-          {/* 404 CATCH-ALL */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Suspense>
-    </ErrorBoundary>
+        {/* 404 CATCH-ALL */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   )
 }
