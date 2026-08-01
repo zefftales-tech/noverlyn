@@ -306,8 +306,12 @@ export const LeadDetailPage: React.FC = () => {
                   size="sm"
                   onClick={async () => {
                     if (confirm('Archive this lead?')) {
-                      await leadsApi.archiveLead(lead.id)
-                      navigate('/leads/archived')
+                      try {
+                        await leadsApi.archiveLead(lead.id)
+                        navigate('/leads/archived')
+                      } catch (err: unknown) {
+                        alert(err instanceof Error ? err.message : 'Failed to archive lead')
+                      }
                     }
                   }}
                   icon={<Archive className="w-3.5 h-3.5 text-brand-blue" />}
@@ -320,13 +324,17 @@ export const LeadDetailPage: React.FC = () => {
                   onClick={async () => {
                     const reason = prompt('Reason for moving this lead to Trash:')
                     if (reason !== null) {
-                      await leadsApi.softDeleteLead(lead.id, reason || undefined)
-                      navigate('/leads/trash')
+                      try {
+                        await leadsApi.softDeleteLead(lead.id, reason || undefined)
+                        navigate('/leads/trash')
+                      } catch (err: unknown) {
+                        alert(err instanceof Error ? err.message : 'Failed to move lead to Trash')
+                      }
                     }
                   }}
                   icon={<Trash2 className="w-3.5 h-3.5 text-status-critical" />}
                 >
-                  Trash
+                  Move to Trash
                 </Button>
               </>
             )}

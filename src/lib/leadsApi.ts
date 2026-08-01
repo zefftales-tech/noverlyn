@@ -484,7 +484,7 @@ export const leadsApi = {
       return true
     } catch (err) {
       console.error('Error archiving lead:', err)
-      return false
+      throw err
     }
   },
 
@@ -495,7 +495,7 @@ export const leadsApi = {
       return true
     } catch (err) {
       console.error('Error restoring archived lead:', err)
-      return false
+      throw err
     }
   },
 
@@ -509,7 +509,7 @@ export const leadsApi = {
       return true
     } catch (err) {
       console.error('Error moving lead to trash:', err)
-      return false
+      throw err
     }
   },
 
@@ -520,7 +520,7 @@ export const leadsApi = {
       return true
     } catch (err) {
       console.error('Error restoring deleted lead:', err)
-      return false
+      throw err
     }
   },
 
@@ -534,7 +534,7 @@ export const leadsApi = {
       return true
     } catch (err) {
       console.error('Error permanently deleting lead:', err)
-      return false
+      throw err
     }
   },
 

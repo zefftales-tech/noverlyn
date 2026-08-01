@@ -29,13 +29,17 @@ import {
   FileSpreadsheet,
   CheckSquare,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Archive,
+  Trash2,
+  X,
+  CheckCircle2
 } from 'lucide-react'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 
 export const AllLeadsPage: React.FC = () => {
-  const { currentWorkspace } = useWorkspace()
+  const { currentWorkspace, currentRole } = useWorkspace()
   const navigate = useNavigate()
 
   const [leads, setLeads] = useState<Lead[]>([])
@@ -43,6 +47,7 @@ export const AllLeadsPage: React.FC = () => {
   const [membersList, setMembersList] = useState<Array<{ userId: string; fullName: string }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,11 +71,24 @@ export const AllLeadsPage: React.FC = () => {
   const [bulkStage, setBulkStage] = useState<LeadStage>('contacted')
   const [bulkLoading, setBulkLoading] = useState(false)
 
-  // Modals
+  // Trash Confirmation Modal State
+  const [isTrashModalOpen, setIsTrashModalOpen] = useState(false)
+  const [trashTargets, setTrashTargets] = useState<Lead[]>([])
+  const [trashReason, setTrashReason] = useState('')
+  const [trashing, setTrashing] = useState(false)
+
+  // Action Modals
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false)
   const [isLogContactOpen, setIsLogContactOpen] = useState(false)
   const [isScheduleOpen, setIsScheduleOpen] = useState(false)
+
+  const isOwnerOrManager = currentRole === 'owner' || currentRole === 'manager'
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 4000)
+  }
 
   const fetchLeads = useCallback(async () => {
     if (!currentWorkspace) return
@@ -155,22 +173,95 @@ export const AllLeadsPage: React.FC = () => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
   }
 
+  // Open Trash Confirmation Modal for Single Lead
+  const handleOpenSingleTrashModal = (lead: Lead) => {
+    setTrashTargets([lead])
+    setTrashReason('')
+    setIsTrashModalOpen(true)
+  }
+
+  // Open Trash Confirmation Modal for Bulk Selection
+  const handleOpenBulkTrashModal = () => {
+    const targets = leads.filter((l) => selectedIds.includes(l.id))
+    if (targets.length === 0) return
+    setTrashTargets(targets)
+    setTrashReason('')
+    setIsTrashModalOpen(true)
+  }
+
+  // Execute Soft Delete via RPC
+  const handleExecuteTrash = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (trashTargets.length === 0) return
+
+    setTrashing(true)
+    setError(null)
+
+    let successCount = 0
+    let failureCount = 0
+    let lastError = ''
+
+    for (const lead of trashTargets) {
+      try {
+        await leadsApi.softDeleteLead(lead.id, trashReason.trim() || undefined)
+        successCount++
+      } catch (err: unknown) {
+        console.error(`Failed to move lead ${lead.id} to trash:`, err)
+        failureCount++
+        lastError = err instanceof Error ? err.message : 'Deletion failed'
+      }
+    }
+
+    setTrashing(false)
+    setIsTrashModalOpen(false)
+
+    if (successCount > 0) {
+      setSelectedIds([])
+      await fetchLeads()
+      showToast(
+        successCount === 1
+          ? `Lead "${trashTargets[0].full_name}" moved to Trash.`
+          : `${successCount} leads moved to Trash.`
+      )
+    }
+
+    if (failureCount > 0) {
+      setError(`Failed to trash ${failureCount} lead(s): ${lastError}`)
+    }
+  }
+
+  // Execute Single Lead Archive
+  const handleSingleArchive = async (lead: Lead) => {
+    if (!confirm(`Archive lead "${lead.full_name}"?`)) return
+    try {
+      await leadsApi.archiveLead(lead.id)
+      await fetchLeads()
+      showToast(`Lead "${lead.full_name}" archived.`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to archive lead')
+    }
+  }
+
+  // Execute Bulk Actions
   const handleExecuteBulkAction = async () => {
     if (!currentWorkspace || selectedIds.length === 0 || !bulkAction) return
+
+    if (bulkAction === 'trash') {
+      handleOpenBulkTrashModal()
+      return
+    }
+
     setBulkLoading(true)
     setError(null)
 
     try {
-      const updates: Record<string, unknown> = {}
       if (bulkAction === 'archive') {
         for (const id of selectedIds) {
           await leadsApi.archiveLead(id)
         }
-      } else if (bulkAction === 'trash') {
-        for (const id of selectedIds) {
-          await leadsApi.softDeleteLead(id, 'Bulk trash action')
-        }
+        showToast(`${selectedIds.length} lead(s) archived.`)
       } else {
+        const updates: Record<string, unknown> = {}
         if (bulkAction === 'assign') {
           if (!bulkAgentId) {
             setError('Please select an active agent to assign')
@@ -184,10 +275,12 @@ export const AllLeadsPage: React.FC = () => {
           updates.stage = bulkStage
         }
         await leadsApi.bulkUpdateLeads(currentWorkspace.id, selectedIds, updates)
+        showToast(`Updated ${selectedIds.length} lead(s).`)
       }
+
       setSelectedIds([])
       setBulkAction('')
-      fetchLeads()
+      await fetchLeads()
     } catch (err: unknown) {
       console.error('[Bulk Action Error]', err)
       setError(err instanceof Error ? err.message : 'Bulk operation failed')
@@ -231,6 +324,17 @@ export const AllLeadsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-[150] bg-navy-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-navy-700 animate-in fade-in slide-in-from-bottom duration-200">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold">{toastMessage}</span>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/leads/trash')} className="text-brand-blue-light hover:text-white underline text-[11px] p-0 h-auto">
+            View Trash
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-surface-border">
         <div>
@@ -240,7 +344,18 @@ export const AllLeadsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {isOwnerOrManager && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Trash2 className="w-4 h-4 text-status-critical" />}
+              onClick={() => navigate('/leads/trash')}
+            >
+              Open Trash
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -555,6 +670,26 @@ export const AllLeadsPage: React.FC = () => {
                           }}
                           title="Schedule Follow-up"
                         />
+
+                        {isOwnerOrManager && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<Archive className="w-3.5 h-3.5 text-brand-blue" />}
+                              onClick={() => handleSingleArchive(lead)}
+                              title="Archive Lead"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<Trash2 className="w-3.5 h-3.5 text-status-critical" />}
+                              onClick={() => handleOpenSingleTrashModal(lead)}
+                              title="Move to Trash"
+                            />
+                          </>
+                        )}
+
                         <Button
                           variant="outline"
                           size="sm"
@@ -605,9 +740,30 @@ export const AllLeadsPage: React.FC = () => {
                   <span className="text-content-muted">Agent: <strong className="text-navy-900">{lead.assigned_to ? membersMap[lead.assigned_to] || 'Assigned' : 'Unassigned'}</strong></span>
                 </div>
 
-                <div className="flex justify-end pt-2">
+                <div className="flex items-center justify-between pt-2">
+                  {isOwnerOrManager ? (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Archive className="w-3.5 h-3.5 text-brand-blue" />}
+                        onClick={() => handleSingleArchive(lead)}
+                      >
+                        Archive
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 className="w-3.5 h-3.5 text-status-critical" />}
+                        onClick={() => handleOpenSingleTrashModal(lead)}
+                      >
+                        Trash
+                      </Button>
+                    </div>
+                  ) : <div />}
+
                   <Button variant="outline" size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => navigate(`/leads/${lead.id}`)}>
-                    Open Detail Page
+                    Open Detail
                   </Button>
                 </div>
               </div>
@@ -643,6 +799,57 @@ export const AllLeadsPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* MOVE TO TRASH CONFIRMATION MODAL */}
+      {isTrashModalOpen && trashTargets.length > 0 && (
+        <div className="fixed inset-0 z-[120] bg-navy-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-surface-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+              <h3 className="font-heading font-bold text-base text-status-critical flex items-center gap-2">
+                <Trash2 className="w-5 h-5" /> Move to Trash
+              </h3>
+              <button onClick={() => setIsTrashModalOpen(false)} className="text-slate-400 hover:text-navy-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteTrash} className="space-y-4 text-xs">
+              <p className="text-navy-900 font-semibold">
+                Move {trashTargets.length === 1 ? (
+                  <span className="font-bold text-navy-900">{trashTargets[0].full_name}</span>
+                ) : (
+                  <span className="font-bold text-navy-900">{trashTargets.length} selected leads</span>
+                )} to Trash?
+              </p>
+              <p className="text-content-secondary">
+                Leads moved to Trash can be restored by Managers and Owners at any time.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-content-primary mb-1">
+                  Reason for moving to Trash (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Duplicate inquiry, test record, or client cancelled..."
+                  value={trashReason}
+                  onChange={(e) => setTrashReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-surface-border text-xs text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsTrashModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="danger" size="sm" isLoading={trashing} icon={<Trash2 className="w-4 h-4" />}>
+                  Move to Trash
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
