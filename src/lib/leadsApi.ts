@@ -117,9 +117,17 @@ async function callRpc<T>(fnName: string, params: Record<string, unknown>): Prom
   const { data, error } = await (supabase.rpc as unknown as (
     fn: string,
     args: Record<string, unknown>
-  ) => Promise<{ data: unknown; error: Error | null }>)(fnName, params)
+  ) => Promise<{ data: unknown; error: { code?: string; message: string; details?: string; hint?: string } | null }>)(fnName, params)
 
-  if (error) throw error
+  if (error) {
+    console.error(`[RPC Error: ${fnName}]`, {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    })
+    throw new Error(error.message || `RPC ${fnName} failed`)
+  }
   return data as T
 }
 

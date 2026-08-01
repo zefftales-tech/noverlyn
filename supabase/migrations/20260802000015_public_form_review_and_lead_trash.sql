@@ -400,7 +400,7 @@ BEGIN
     -- 1. Create Lead Record
     INSERT INTO public.leads (
         workspace_id, full_name, phone, email, source, requirement, estimated_value, priority,
-        stage, status, assigned_user_id, public_form_data, created_at, updated_at
+        stage, status, assigned_to, public_form_data, created_at, updated_at
     )
     VALUES (
         v_sub.workspace_id, v_sub.full_name, v_sub.phone, v_sub.email, COALESCE(v_sub.source, 'Public Form'),
@@ -426,7 +426,7 @@ BEGIN
 
     -- 3. Optional Follow-up & Note
     IF p_next_follow_up_at IS NOT NULL THEN
-        INSERT INTO public.follow_ups (workspace_id, lead_id, assigned_user_id, follow_up_type, due_date, scheduled_at, status, created_at, updated_at)
+        INSERT INTO public.follow_ups (workspace_id, lead_id, assigned_to, follow_up_type, due_date, scheduled_at, status, created_at, updated_at)
         VALUES (v_sub.workspace_id, v_lead_id, COALESCE(p_assigned_to, v_caller_id), 'call', p_next_follow_up_at, p_next_follow_up_at, 'pending', NOW(), NOW());
     END IF;
 
@@ -642,7 +642,7 @@ BEGIN
         deleted_by = v_caller_id,
         deletion_reason = trim(p_deletion_reason),
         previous_stage_key = v_lead.stage,
-        previous_assigned_to = v_lead.assigned_user_id,
+        previous_assigned_to = v_lead.assigned_to,
         updated_at = NOW()
     WHERE id = p_lead_id;
 
@@ -695,7 +695,7 @@ BEGIN
         deleted_by = NULL,
         deletion_reason = NULL,
         stage = v_restored_stage,
-        assigned_user_id = v_restored_assignee,
+        assigned_to = v_restored_assignee,
         archived_at = NULL,
         updated_at = NOW()
     WHERE id = p_lead_id;
