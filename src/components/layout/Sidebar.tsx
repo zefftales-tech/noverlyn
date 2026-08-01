@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWorkspace } from '../../hooks/useWorkspace'
+import { formsApi } from '../../lib/formsApi'
 import { Avatar } from '../ui/Avatar'
 import {
   Home,
@@ -17,7 +18,9 @@ import {
   List,
   Upload,
   X,
-  FileText
+  FileText,
+  Archive,
+  Trash2
 } from 'lucide-react'
 
 import { getTemplateForBusinessType } from '../../lib/templates'
@@ -33,11 +36,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
   const { currentWorkspace, currentRole } = useWorkspace()
   const location = useLocation()
 
+  const [pendingReviewCount, setPendingReviewCount] = useState(0)
+
   const activeTemplate = getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type)
 
   // Leads dropdown expanded state
   const isLeadsActive = location.pathname.startsWith('/leads')
   const [leadsExpanded, setLeadsExpanded] = useState<boolean>(isLeadsActive || true)
+
+  const isOwnerOrManager = currentRole === 'owner' || currentRole === 'manager'
+
+  useEffect(() => {
+    if (!currentWorkspace || !isOwnerOrManager) return
+    let isSubscribed = true
+
+    formsApi
+      .getPendingCount(currentWorkspace.id)
+      .then((cnt) => {
+        if (isSubscribed) setPendingReviewCount(cnt)
+      })
+      .catch(() => {})
+
+    return () => {
+      isSubscribed = false
+    }
+  }, [currentWorkspace, isOwnerOrManager, location.pathname])
 
   const navItems = [
     { to: '/', label: 'Home', icon: <Home className="w-4 h-4" /> },
@@ -48,11 +71,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
     { to: '/leads/inbox', label: 'Inbox', icon: <Inbox className="w-3.5 h-3.5" /> },
     { to: '/leads/all', label: 'All Leads', icon: <List className="w-3.5 h-3.5" /> },
     { to: '/leads/import', label: 'Import', icon: <Upload className="w-3.5 h-3.5" /> },
+    { to: '/leads/archived', label: 'Archived', icon: <Archive className="w-3.5 h-3.5" /> },
+    { to: '/leads/trash', label: 'Trash', icon: <Trash2 className="w-3.5 h-3.5" /> },
   ]
 
   const bottomNavItems = [
     { to: '/pipeline', label: 'Pipeline', icon: <GitPullRequest className="w-4 h-4" /> },
-    { to: '/lead-forms', label: 'Lead Forms', icon: <FileText className="w-4 h-4" /> },
+    {
+      to: '/lead-forms',
+      label: 'Lead Forms',
+      icon: <FileText className="w-4 h-4" />,
+      badge: pendingReviewCount > 0 ? pendingReviewCount : undefined,
+    },
+    ...(isOwnerOrManager
+      ? [{ to: '/lead-forms/review', label: 'Review Inbox', icon: <Inbox className="w-4 h-4" />, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined }]
+      : []),
     { to: '/team', label: 'Team', icon: <Users className="w-4 h-4" /> },
     { to: '/insights', label: 'Insights', icon: <BarChart3 className="w-4 h-4" /> },
     { to: '/settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
@@ -141,15 +174,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
               to={item.to}
               onClick={onMobileClose}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                `flex items-center justify-between px-3 py-2.5 rounded-lg font-medium transition-colors ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-xs'
                     : 'text-slate-300 hover:bg-navy-800 hover:text-white'
                 }`
               }
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <div className="flex items-center gap-3">
+                {item.icon}
+                <span>{item.label}</span>
+              </div>
+              {item.badge !== undefined && (
+                <span className="bg-brand-amber text-navy-950 font-extrabold text-[10px] px-1.5 py-0.2 rounded-full">
+                  {item.badge}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

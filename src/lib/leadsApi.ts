@@ -397,6 +397,8 @@ export const leadsApi = {
       .from('leads')
       .select('*', { count: 'exact' })
       .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .is('archived_at', null)
 
     // Filters
     if (options?.stageFilter && options.stageFilter !== 'all') {
@@ -473,5 +475,101 @@ export const leadsApi = {
     }
 
     return data as PipelineStage[]
+  },
+
+  // 16. Archive Lead
+  archiveLead: async (leadId: string): Promise<boolean> => {
+    try {
+      await callRpc('archive_lead_rpc', { p_lead_id: leadId })
+      return true
+    } catch (err) {
+      console.error('Error archiving lead:', err)
+      return false
+    }
+  },
+
+  // 17. Restore Archived Lead
+  restoreArchivedLead: async (leadId: string): Promise<boolean> => {
+    try {
+      await callRpc('restore_archived_lead_rpc', { p_lead_id: leadId })
+      return true
+    } catch (err) {
+      console.error('Error restoring archived lead:', err)
+      return false
+    }
+  },
+
+  // 18. Soft Delete Lead (Move to Trash)
+  softDeleteLead: async (leadId: string, deletionReason?: string): Promise<boolean> => {
+    try {
+      await callRpc('soft_delete_lead_rpc', {
+        p_lead_id: leadId,
+        p_deletion_reason: deletionReason || null,
+      })
+      return true
+    } catch (err) {
+      console.error('Error moving lead to trash:', err)
+      return false
+    }
+  },
+
+  // 19. Restore Deleted Lead (From Trash)
+  restoreDeletedLead: async (leadId: string): Promise<boolean> => {
+    try {
+      await callRpc('restore_deleted_lead_rpc', { p_lead_id: leadId })
+      return true
+    } catch (err) {
+      console.error('Error restoring deleted lead:', err)
+      return false
+    }
+  },
+
+  // 20. Permanently Delete Lead (Owner Only)
+  permanentlyDeleteLead: async (leadId: string, confirmation: string): Promise<boolean> => {
+    try {
+      await callRpc('permanently_delete_lead_rpc', {
+        p_lead_id: leadId,
+        p_confirmation: confirmation,
+      })
+      return true
+    } catch (err) {
+      console.error('Error permanently deleting lead:', err)
+      return false
+    }
+  },
+
+  // 21. Query Archived Leads
+  getArchivedLeads: async (workspaceId: string) => {
+    if (!supabase) return []
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching archived leads:', error)
+      return []
+    }
+    return (data || []) as Lead[]
+  },
+
+  // 22. Query Trash Leads
+  getTrashLeads: async (workspaceId: string) => {
+    if (!supabase) return []
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching trash leads:', error)
+      return []
+    }
+    return (data || []) as Lead[]
   },
 }

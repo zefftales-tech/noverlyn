@@ -35,7 +35,9 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  FileText
+  FileText,
+  Archive,
+  Trash2
 } from 'lucide-react'
 
 type Lead = Database['public']['Tables']['leads']['Row']
@@ -47,7 +49,7 @@ type LeadNote = Database['public']['Tables']['lead_notes']['Row'] & {
 
 export const LeadDetailPage: React.FC = () => {
   const { leadId } = useParams<{ leadId: string }>()
-  const { currentWorkspace } = useWorkspace()
+  const { currentWorkspace, currentRole } = useWorkspace()
   const navigate = useNavigate()
 
   const [lead, setLead] = useState<Lead | null>(null)
@@ -296,6 +298,38 @@ export const LeadDetailPage: React.FC = () => {
             >
               Edit Lead
             </Button>
+
+            {(currentRole === 'owner' || currentRole === 'manager') && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm('Archive this lead?')) {
+                      await leadsApi.archiveLead(lead.id)
+                      navigate('/leads/archived')
+                    }
+                  }}
+                  icon={<Archive className="w-3.5 h-3.5 text-brand-blue" />}
+                >
+                  Archive
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    const reason = prompt('Reason for moving this lead to Trash:')
+                    if (reason !== null) {
+                      await leadsApi.softDeleteLead(lead.id, reason || undefined)
+                      navigate('/leads/trash')
+                    }
+                  }}
+                  icon={<Trash2 className="w-3.5 h-3.5 text-status-critical" />}
+                >
+                  Trash
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

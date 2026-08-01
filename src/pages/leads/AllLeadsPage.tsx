@@ -162,22 +162,29 @@ export const AllLeadsPage: React.FC = () => {
 
     try {
       const updates: Record<string, unknown> = {}
-      if (bulkAction === 'assign') {
-        if (!bulkAgentId) {
-          setError('Please select an active agent to assign')
-          setBulkLoading(false)
-          return
+      if (bulkAction === 'archive') {
+        for (const id of selectedIds) {
+          await leadsApi.archiveLead(id)
         }
-        updates.assigned_to = bulkAgentId
-      } else if (bulkAction === 'priority') {
-        updates.priority = bulkPriority
-      } else if (bulkAction === 'stage') {
-        updates.stage = bulkStage
-      } else if (bulkAction === 'archive') {
-        updates.status = 'archived'
+      } else if (bulkAction === 'trash') {
+        for (const id of selectedIds) {
+          await leadsApi.softDeleteLead(id, 'Bulk trash action')
+        }
+      } else {
+        if (bulkAction === 'assign') {
+          if (!bulkAgentId) {
+            setError('Please select an active agent to assign')
+            setBulkLoading(false)
+            return
+          }
+          updates.assigned_to = bulkAgentId
+        } else if (bulkAction === 'priority') {
+          updates.priority = bulkPriority
+        } else if (bulkAction === 'stage') {
+          updates.stage = bulkStage
+        }
+        await leadsApi.bulkUpdateLeads(currentWorkspace.id, selectedIds, updates)
       }
-
-      await leadsApi.bulkUpdateLeads(currentWorkspace.id, selectedIds, updates)
       setSelectedIds([])
       setBulkAction('')
       fetchLeads()
@@ -280,6 +287,7 @@ export const AllLeadsPage: React.FC = () => {
               <option value="priority">Bulk Change Priority</option>
               <option value="stage">Bulk Change Stage</option>
               <option value="archive">Bulk Archive</option>
+              <option value="trash">Bulk Move to Trash</option>
             </select>
 
             {bulkAction === 'assign' && (

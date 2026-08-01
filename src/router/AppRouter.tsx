@@ -32,6 +32,9 @@ import { NotFoundPage } from '../pages/NotFoundPage'
 
 import { PublicLeadFormPage } from '../pages/forms/PublicLeadFormPage'
 import { LeadFormsPage } from '../pages/forms/LeadFormsPage'
+import { ReviewInboxPage } from '../pages/forms/ReviewInboxPage'
+import { ArchivedLeadsPage } from '../pages/leads/ArchivedLeadsPage'
+import { LeadTrashPage } from '../pages/leads/LeadTrashPage'
 
 // Guard for initial first-time onboarding (/onboarding)
 const OnboardingRoute: React.FC = () => {
@@ -118,10 +121,13 @@ export const AppRouter: React.FC = () => {
           <Route path="/leads" element={<AllLeadsPage />} />
           <Route path="/leads/inbox" element={<InboxLeadsPage />} />
           <Route path="/leads/all" element={<AllLeadsPage />} />
+          <Route path="/leads/archived" element={<ArchivedLeadsPage />} />
+          <Route path="/leads/trash" element={<LeadTrashPage />} />
           <Route path="/leads/import" element={<CsvImportPage />} />
           <Route path="/leads/:leadId" element={<LeadDetailPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/lead-forms" element={<LeadFormsPage />} />
+          <Route path="/lead-forms/review" element={<ReviewInboxPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
