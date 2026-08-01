@@ -205,9 +205,10 @@ export const WorkspaceSwitcher: React.FC = () => {
           <div className="pt-1.5 px-1.5 border-t border-surface-border/60 mt-1">
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation()
                 setIsOpen(false)
-                navigate('/onboarding')
+                navigate('/workspaces/new')
               }}
               className="w-full text-left p-2.5 rounded-xl text-xs font-semibold text-brand-blue hover:bg-blue-50/70 flex items-center gap-2 transition-colors"
             >

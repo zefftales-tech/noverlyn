@@ -30,6 +30,7 @@ import { InsightsPage } from '../pages/InsightsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 
+// Guard for initial first-time onboarding (/onboarding)
 const OnboardingRoute: React.FC = () => {
   const { user, loading: authLoading } = useAuth()
   const { currentWorkspace, loading: wsLoading } = useWorkspace()
@@ -48,6 +49,26 @@ const OnboardingRoute: React.FC = () => {
 
   if (currentWorkspace) {
     return <Navigate to="/" replace />
+  }
+
+  return <OnboardingWizard />
+}
+
+// Guard for intentional workspace creation (/workspaces/new)
+const CreateWorkspaceRoute: React.FC = () => {
+  const { user, loading: authLoading } = useAuth()
+  const { loading: wsLoading } = useWorkspace()
+
+  if (authLoading || wsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
+        <LoadingState label="Loading workspace setup..." />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
   }
 
   return <OnboardingWizard />
@@ -72,8 +93,11 @@ export const AppRouter: React.FC = () => {
         {/* INVITATION ACCEPTANCE ROUTE */}
         <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
-        {/* ONBOARDING ROUTE */}
+        {/* FIRST-TIME ONBOARDING ROUTE */}
         <Route path="/onboarding" element={<OnboardingRoute />} />
+
+        {/* EXPLICIT MULTI-WORKSPACE CREATION ROUTE */}
+        <Route path="/workspaces/new" element={<CreateWorkspaceRoute />} />
 
         {/* PROTECTED AUTHENTICATED APP ROUTES */}
         <Route
