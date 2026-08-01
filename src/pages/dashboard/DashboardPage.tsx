@@ -104,22 +104,36 @@ export const DashboardPage: React.FC = () => {
       // 4. Fetch Members & Active Leads count per agent
       const { data: mems } = await supabase
         .from('workspace_members')
-        .select('user_id, profile:profiles(full_name)')
+        .select('user_id')
         .eq('workspace_id', currentWorkspace.id)
         .eq('status', 'active')
 
-      const rawMems = (mems as unknown) as Array<{ user_id: string; profile: { full_name: string } | null }> | null
+      const rawMems = (mems || []) as Array<{ user_id: string }>
 
-      if (rawMems) {
+      if (rawMems.length > 0) {
+        const userIds = rawMems.map((m) => m.user_id)
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds)
+
+        const profMap: Record<string, string> = {}
+        if (profs) {
+          (profs as Array<{ id: string; full_name: string }>).forEach((p) => {
+            profMap[p.id] = p.full_name
+          })
+        }
+
         const tStats = rawMems.map((m) => {
-          const prof = m.profile
           const activeCount = leadsList.filter((l) => l.assigned_to === m.user_id && l.status === 'active').length
           return {
-            name: prof?.full_name || 'Agent',
+            name: profMap[m.user_id] || 'Agent',
             activeCount,
           }
         })
         setTeamStats(tStats)
+      } else {
+        setTeamStats([])
       }
     } catch (err) {
       console.error('Error loading dashboard data:', err)

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Database, LeadStage, LeadPriority, LeadStatus, LostReason, FollowUpType } from '../types/database.types'
+import type { Database, LeadStage, LeadPriority, LeadStatus, LostReason, FollowUpType, WorkspaceRole } from '../types/database.types'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 type FollowUp = Database['public']['Tables']['follow_ups']['Row']
@@ -290,30 +290,53 @@ export const leadsApi = {
   // Query Workspace Members for selectors
   getWorkspaceMembers: async (workspaceId: string) => {
     if (!supabase) return []
-    const { data, error } = await supabase
+
+    // 1. Fetch active workspace members
+    const { data: memsData, error: memsErr } = await supabase
       .from('workspace_members')
-      .select(`
-        user_id,
-        role,
-        status,
-        profile:profiles(id, full_name, avatar_url)
-      `)
+      .select('user_id, role, status')
       .eq('workspace_id', workspaceId)
       .eq('status', 'active')
 
-    if (error) {
-      console.error('Error fetching workspace members:', error)
+    if (memsErr) {
+      console.error('[Error fetching workspace_members in getWorkspaceMembers]', {
+        message: memsErr.message,
+        details: memsErr.details,
+        hint: memsErr.hint,
+        code: memsErr.code,
+      })
       return []
     }
 
-    const rawData = (data as unknown) as Array<{
-      user_id: string
-      role: string
-      profile: { id: string; full_name: string; avatar_url: string | null } | null
-    }> | null
+    const memsList = (memsData || []) as Array<{ user_id: string; role: WorkspaceRole; status: string }>
+    if (memsList.length === 0) return []
 
-    return (rawData || []).map((item) => {
-      const prof = item.profile
+    const userIds = memsList.map((m) => m.user_id)
+
+    // 2. Fetch profiles separately
+    const { data: profsData, error: profsErr } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', userIds)
+
+    if (profsErr) {
+      console.error('[Error fetching profiles in getWorkspaceMembers]', {
+        message: profsErr.message,
+        details: profsErr.details,
+        hint: profsErr.hint,
+        code: profsErr.code,
+      })
+    }
+
+    const profMap: Record<string, { full_name: string; avatar_url: string | null }> = {}
+    if (profsData) {
+      (profsData as Array<{ id: string; full_name: string; avatar_url: string | null }>).forEach((p) => {
+        profMap[p.id] = p
+      })
+    }
+
+    return memsList.map((item) => {
+      const prof = profMap[item.user_id]
       return {
         userId: item.user_id,
         role: item.role,
