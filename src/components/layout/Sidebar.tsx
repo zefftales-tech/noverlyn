@@ -16,7 +16,8 @@ import {
   Inbox,
   List,
   Upload,
-  X
+  X,
+  FileText
 } from 'lucide-react'
 
 import { getTemplateForBusinessType } from '../../lib/templates'
@@ -51,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
 
   const bottomNavItems = [
     { to: '/pipeline', label: 'Pipeline', icon: <GitPullRequest className="w-4 h-4" /> },
+    { to: '/lead-forms', label: 'Lead Forms', icon: <FileText className="w-4 h-4" /> },
     { to: '/team', label: 'Team', icon: <Users className="w-4 h-4" /> },
     { to: '/insights', label: 'Insights', icon: <BarChart3 className="w-4 h-4" /> },
     { to: '/settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },

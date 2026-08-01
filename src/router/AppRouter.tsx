@@ -30,6 +30,9 @@ import { InsightsPage } from '../pages/InsightsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 
+import { PublicLeadFormPage } from '../pages/forms/PublicLeadFormPage'
+import { LeadFormsPage } from '../pages/forms/LeadFormsPage'
+
 // Guard for initial first-time onboarding (/onboarding)
 const OnboardingRoute: React.FC = () => {
   const { user, loading: authLoading } = useAuth()
@@ -93,6 +96,9 @@ export const AppRouter: React.FC = () => {
         {/* INVITATION ACCEPTANCE ROUTE */}
         <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
+        {/* PUBLIC UNAUTHENTICATED LEAD CAPTURE FORM ROUTE */}
+        <Route path="/forms/:slug" element={<PublicLeadFormPage />} />
+
         {/* FIRST-TIME ONBOARDING ROUTE */}
         <Route path="/onboarding" element={<OnboardingRoute />} />
 
@@ -115,6 +121,7 @@ export const AppRouter: React.FC = () => {
           <Route path="/leads/import" element={<CsvImportPage />} />
           <Route path="/leads/:leadId" element={<LeadDetailPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
+          <Route path="/lead-forms" element={<LeadFormsPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
