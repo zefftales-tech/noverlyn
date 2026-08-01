@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from '../lib/supabase'
 import { MissingConfigError } from '../components/ui/MissingConfigError'
 import { AppLayout } from '../components/layout/AppLayout'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
-import { LoadingState } from '../components/ui/LoadingState'
+import { AppLoadingScreen } from '../components/ui/AppLoadingScreen'
 
 import { useAuth } from '../hooks/useAuth'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -42,11 +42,7 @@ const OnboardingRoute: React.FC = () => {
   const { currentWorkspace, loading: wsLoading } = useWorkspace()
 
   if (authLoading || wsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
-        <LoadingState label="Loading workspace..." />
-      </div>
-    )
+    return <AppLoadingScreen message="Loading workspace..." />
   }
 
   if (!user) {
@@ -66,11 +62,7 @@ const CreateWorkspaceRoute: React.FC = () => {
   const { loading: wsLoading } = useWorkspace()
 
   if (authLoading || wsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
-        <LoadingState label="Loading workspace setup..." />
-      </div>
-    )
+    return <AppLoadingScreen message="Setting up workspace..." />
   }
 
   if (!user) {
@@ -86,7 +78,7 @@ export const AppRouter: React.FC = () => {
   }
 
   return (
-    <Suspense fallback={<div className="p-12"><LoadingState label="Loading workspace..." /></div>}>
+    <Suspense fallback={<AppLoadingScreen message="Loading application..." />}>
       <Routes>
         {/* PUBLIC AUTH & LEGAL ROUTES */}
         <Route path="/login" element={<LoginPage />} />

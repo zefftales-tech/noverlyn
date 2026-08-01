@@ -38,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
     <>
       <header className="h-16 bg-surface-card border-b border-surface-border sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between shadow-2xs">
         {/* Left section: Mobile toggle & Workspace Switcher */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={onMobileMenuToggle}
             className="p-2 rounded-lg text-content-secondary hover:text-navy-900 hover:bg-slate-100 lg:hidden transition-colors"
@@ -47,8 +47,8 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="lg:hidden">
-            <NoverlynLogo variant="mark" size="sm" />
+          <div className="lg:hidden flex items-center shrink-0">
+            <NoverlynLogo variant="light" size="sm" showWordmark={true} />
           </div>
 
           <WorkspaceSwitcher />

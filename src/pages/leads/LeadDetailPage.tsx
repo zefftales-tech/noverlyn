@@ -245,17 +245,18 @@ export const LeadDetailPage: React.FC = () => {
                 {lead.status === 'lost' && <Badge variant="critical">LOST DEAL</Badge>}
               </div>
 
-              <div className="flex items-center gap-4 text-xs text-content-secondary mt-1 flex-wrap">
-                <span className="flex items-center gap-1 font-semibold text-navy-900">
-                  <Phone className="w-3.5 h-3.5 text-content-muted" /> {lead.phone}
+              <div className="flex items-center gap-4 text-xs text-content-secondary mt-1 flex-wrap min-w-0">
+                <span className="flex items-center gap-1 font-semibold text-navy-900 shrink-0">
+                  <Phone className="w-3.5 h-3.5 text-content-muted shrink-0" /> {lead.phone}
                 </span>
                 {lead.email && (
-                  <span className="flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-content-muted" /> {lead.email}
+                  <span className="flex items-center gap-1 min-w-0 break-all">
+                    <Mail className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                    <span className="break-all">{lead.email}</span>
                   </span>
                 )}
-                <span className="flex items-center gap-1">
-                  <UserCheck className="w-3.5 h-3.5 text-content-muted" /> Assigned: <strong className="text-navy-900">{lead.assigned_to ? membersMap[lead.assigned_to] || 'Agent' : 'Unassigned'}</strong>
+                <span className="flex items-center gap-1 shrink-0">
+                  <UserCheck className="w-3.5 h-3.5 text-content-muted shrink-0" /> Assigned: <strong className="text-navy-900">{lead.assigned_to ? membersMap[lead.assigned_to] || 'Agent' : 'Unassigned'}</strong>
                 </span>
               </div>
             </div>

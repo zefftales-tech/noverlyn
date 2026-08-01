@@ -33,7 +33,7 @@ export const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'noverlyn_active_workspace_id'
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [workspaces, setWorkspaces] = useState<WorkspaceWithRole[]>([])
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
   const [currentRole, setCurrentRole] = useState<WorkspaceRole | null>(null)
@@ -48,6 +48,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setLoading(false)
       return
     }
+
+    setLoading(true)
 
     try {
       // 1. Fetch active workspace memberships for the authenticated user
@@ -138,6 +140,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let isSubscribed = true
 
     const runEffect = async () => {
+      // If auth session is still hydrating, keep workspace loading TRUE
+      if (authLoading) {
+        setLoading(true)
+        return
+      }
+
       if (user && isSupabaseConfigured && supabase) {
         await loadWorkspaces()
       } else {
@@ -154,7 +162,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       isSubscribed = false
     }
-  }, [user, loadWorkspaces])
+  }, [user, authLoading, loadWorkspaces])
 
   const switchWorkspace = (workspaceId: string) => {
     const found = workspaces.find((w) => w.workspace.id === workspaceId)
@@ -180,7 +188,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const { data, error: rpcErr } = await (supabase.rpc as unknown as (
         fnName: string,
         params: { p_name: string; p_slug: string; p_timezone: string; p_currency: string; p_business_type: string }
-      ) => Promise<{ data: unknown; error: Error | null }>)('create_workspace', {
+      ) => Promise<{ data: unknown; error: Error | null }>)( 'create_workspace', {
         p_name: name,
         p_slug: slug,
         p_timezone: timezone,
@@ -205,7 +213,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }
 
-  const needsOnboarding = !loading && workspaces.length === 0
+  const needsOnboarding = !authLoading && !loading && user !== null && workspaces.length === 0
 
   return (
     <WorkspaceContext.Provider
@@ -213,7 +221,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         currentWorkspace,
         currentRole,
         workspaces,
-        loading,
+        loading: authLoading || loading,
         needsOnboarding,
         error,
         switchWorkspace,

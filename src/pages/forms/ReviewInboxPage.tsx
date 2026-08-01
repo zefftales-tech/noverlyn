@@ -256,13 +256,14 @@ export const ReviewInboxPage: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-content-secondary flex-wrap">
-                  <span className="flex items-center gap-1 font-semibold text-navy-900">
-                    <Phone className="w-3.5 h-3.5 text-content-muted" /> {sub.phone}
+                <div className="flex items-center gap-4 text-xs text-content-secondary flex-wrap min-w-0">
+                  <span className="flex items-center gap-1 font-semibold text-navy-900 shrink-0">
+                    <Phone className="w-3.5 h-3.5 text-content-muted shrink-0" /> {sub.phone}
                   </span>
                   {sub.email && (
-                    <span className="flex items-center gap-1">
-                      <Mail className="w-3.5 h-3.5 text-content-muted" /> {sub.email}
+                    <span className="flex items-center gap-1 min-w-0 break-all">
+                      <Mail className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                      <span className="break-all">{sub.email}</span>
                     </span>
                   )}
                   {sub.budget && (
