@@ -17,7 +17,9 @@ import {
   Phone,
   User,
   Mail,
-  DollarSign
+  DollarSign,
+  HelpCircle,
+  Calendar
 } from 'lucide-react'
 
 export const PublicLeadFormPage: React.FC = () => {
@@ -28,7 +30,7 @@ export const PublicLeadFormPage: React.FC = () => {
   const [formInfo, setFormInfo] = useState<PublicFormInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Form Fields State
+  // Standard Form Fields State
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -36,6 +38,9 @@ export const PublicLeadFormPage: React.FC = () => {
   const [sourceChannel, setSourceChannel] = useState(() => searchParams.get('source') || '')
   const [budget, setBudget] = useState('')
   const [honeypot, setHoneypot] = useState('') // Hidden spam trap
+
+  // Custom Answers State
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string | boolean | number>>({})
 
   const [submitting, setSubmitting] = useState(false)
   const [submittedSuccess, setSubmittedSuccess] = useState(false)
@@ -55,7 +60,7 @@ export const PublicLeadFormPage: React.FC = () => {
       })
       .catch((err: unknown) => {
         if (!isSubscribed) return
-        console.error('Error loading public lead form:', err)
+        console.error('[PublicLeadForm Error]', err)
         const msg = err instanceof Error ? err.message : 'Inquiry form is unavailable or inactive'
         setError(msg)
       })
@@ -68,14 +73,21 @@ export const PublicLeadFormPage: React.FC = () => {
     return () => {
       isSubscribed = false
     }
-  }, [slug, searchParams])
+  }, [slug])
+
+  const handleCustomAnswerChange = (key: string, value: string | boolean | number) => {
+    setCustomAnswers((prev) => ({
+      ...prev,
+      [key]: value,
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!slug) return
 
     if (!fullName.trim() || !phone.trim() || !requirement.trim()) {
-      setSubmitError('Please fill out all required fields: Full Name, Phone, and Requirements.')
+      setSubmitError('Please fill out all required fields: Full Name, Phone, and Inquiry Details.')
       return
     }
 
@@ -92,16 +104,17 @@ export const PublicLeadFormPage: React.FC = () => {
         source: sourceChannel.trim() || undefined,
         budget: budget ? parseFloat(budget) : undefined,
         honeypot: honeypot || undefined,
+        custom_answers: customAnswers,
       })
 
       if (res.success) {
         setSubmittedSuccess(true)
       } else {
-        setSubmitError(res.message || 'Failed to submit inquiry.')
+        setSubmitError(res.message || 'Submission temporarily unavailable. Please try again.')
       }
     } catch (err: unknown) {
-      console.error('Form submission error:', err)
-      const msg = err instanceof Error ? err.message : 'Unable to submit your inquiry. Please try again.'
+      console.error('[PublicLeadForm Submit RPC Error]', err)
+      const msg = err instanceof Error ? err.message : 'Submission temporarily unavailable. Please check required fields.'
       setSubmitError(msg)
     } finally {
       setSubmitting(false)
@@ -115,6 +128,7 @@ export const PublicLeadFormPage: React.FC = () => {
     setEmail('')
     setRequirement('')
     setBudget('')
+    setCustomAnswers({})
     setSubmitError(null)
   }
 
@@ -143,6 +157,7 @@ export const PublicLeadFormPage: React.FC = () => {
   const bType = (formInfo.business_type as BusinessType) || 'real_estate'
   const template = BUSINESS_TEMPLATES[bType]
   const requirementLabel = template?.requirementLabel || 'Requirement & Notes'
+  const activeCustomFields = (formInfo.custom_fields || []).filter((cf) => cf.is_active)
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between py-10 px-4 sm:px-6 lg:px-8">
@@ -199,7 +214,7 @@ export const PublicLeadFormPage: React.FC = () => {
           </div>
         ) : (
           /* Lead Capture Form */
-          <form onSubmit={handleSubmit} className="bg-white border border-surface-border/80 rounded-2xl p-6 sm:p-8 shadow-saas space-y-5">
+          <form onSubmit={handleSubmit} className="bg-white border border-surface-border/80 rounded-2xl p-6 sm:p-8 shadow-saas space-y-7">
             {submitError && (
               <div className="p-3.5 bg-red-50/80 border border-red-200 rounded-xl text-xs text-status-critical flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -218,8 +233,14 @@ export const PublicLeadFormPage: React.FC = () => {
               autoComplete="off"
             />
 
+            {/* SECTION 1: Contact Information */}
             <div className="space-y-4">
-              {/* Full Name */}
+              <div className="pb-1 border-b border-surface-border/50">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" /> SECTION 1 — Contact Information
+                </h3>
+              </div>
+
               <Input
                 label="Full Name *"
                 type="text"
@@ -230,7 +251,6 @@ export const PublicLeadFormPage: React.FC = () => {
                 leftIcon={<User className="w-4 h-4 text-content-muted" />}
               />
 
-              {/* Phone */}
               <Input
                 label="Phone Number *"
                 type="tel"
@@ -241,7 +261,6 @@ export const PublicLeadFormPage: React.FC = () => {
                 leftIcon={<Phone className="w-4 h-4 text-content-muted" />}
               />
 
-              {/* Email (Optional based on config) */}
               {formInfo.show_email && (
                 <Input
                   label="Email Address (Optional)"
@@ -252,8 +271,16 @@ export const PublicLeadFormPage: React.FC = () => {
                   leftIcon={<Mail className="w-4 h-4 text-content-muted" />}
                 />
               )}
+            </div>
 
-              {/* Requirement / Message */}
+            {/* SECTION 2: Inquiry Details */}
+            <div className="space-y-4">
+              <div className="pb-1 border-b border-surface-border/50">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" /> SECTION 2 — Inquiry Details
+                </h3>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-navy-900 mb-1.5">
                   {requirementLabel} *
@@ -268,7 +295,6 @@ export const PublicLeadFormPage: React.FC = () => {
                 />
               </div>
 
-              {/* Source / Channel (Optional based on config) */}
               {formInfo.show_source && (
                 <Input
                   label="Source / Channel (Optional)"
@@ -280,7 +306,6 @@ export const PublicLeadFormPage: React.FC = () => {
                 />
               )}
 
-              {/* Budget / Value (Optional based on config) */}
               {formInfo.show_budget && (
                 <Input
                   label={`Estimated Budget / Value (${formInfo.currency}) (Optional)`}
@@ -292,6 +317,96 @@ export const PublicLeadFormPage: React.FC = () => {
                 />
               )}
             </div>
+
+            {/* SECTION 3: Custom Questions */}
+            {activeCustomFields.length > 0 && (
+              <div className="space-y-4">
+                <div className="pb-1 border-b border-surface-border/50">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-brand-blue flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5" /> SECTION 3 — Additional Questions
+                  </h3>
+                </div>
+
+                {activeCustomFields.map((cf) => (
+                  <div key={cf.id} className="space-y-1.5">
+                    <label className="block text-xs font-bold text-navy-900">
+                      {cf.label} {cf.required && <span className="text-status-critical">*</span>}
+                    </label>
+
+                    {cf.type === 'short_text' && (
+                      <Input
+                        type="text"
+                        placeholder={cf.placeholder || `Enter ${cf.label.toLowerCase()}...`}
+                        value={(customAnswers[cf.key] as string) || ''}
+                        onChange={(e) => handleCustomAnswerChange(cf.key, e.target.value)}
+                        required={cf.required}
+                      />
+                    )}
+
+                    {cf.type === 'long_text' && (
+                      <textarea
+                        rows={3}
+                        placeholder={cf.placeholder || `Enter ${cf.label.toLowerCase()}...`}
+                        value={(customAnswers[cf.key] as string) || ''}
+                        onChange={(e) => handleCustomAnswerChange(cf.key, e.target.value)}
+                        required={cf.required}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-surface-border text-xs text-navy-900 placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all"
+                      />
+                    )}
+
+                    {cf.type === 'number' && (
+                      <Input
+                        type="number"
+                        placeholder={cf.placeholder || 'Enter number...'}
+                        value={(customAnswers[cf.key] as string) || ''}
+                        onChange={(e) => handleCustomAnswerChange(cf.key, e.target.value)}
+                        required={cf.required}
+                      />
+                    )}
+
+                    {cf.type === 'select' && (
+                      <select
+                        value={(customAnswers[cf.key] as string) || ''}
+                        onChange={(e) => handleCustomAnswerChange(cf.key, e.target.value)}
+                        required={cf.required}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-surface-border text-xs text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 bg-white"
+                      >
+                        <option value="">{cf.placeholder || 'Select an option...'}</option>
+                        {(cf.options || []).map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {cf.type === 'date' && (
+                      <Input
+                        type="date"
+                        value={(customAnswers[cf.key] as string) || ''}
+                        onChange={(e) => handleCustomAnswerChange(cf.key, e.target.value)}
+                        required={cf.required}
+                        leftIcon={<Calendar className="w-4 h-4 text-content-muted" />}
+                      />
+                    )}
+
+                    {cf.type === 'checkbox' && (
+                      <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 border border-surface-border rounded-xl">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(customAnswers[cf.key])}
+                          onChange={(e) => handleCustomAnswerChange(cf.key, e.target.checked)}
+                          className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
+                        />
+                        <span className="text-xs font-medium text-navy-900">{cf.placeholder || 'Yes, I agree'}</span>
+                      </label>
+                    )}
+
+                    {cf.help_text && (
+                      <p className="text-[11px] text-content-secondary">{cf.help_text}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <Button
               type="submit"

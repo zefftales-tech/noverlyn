@@ -1,5 +1,20 @@
 import { supabase } from './supabase'
 
+export type CustomFieldType = 'short_text' | 'long_text' | 'number' | 'select' | 'date' | 'checkbox'
+
+export interface CustomFieldDefinition {
+  id: string
+  key: string
+  label: string
+  type: CustomFieldType
+  required: boolean
+  placeholder?: string
+  help_text?: string
+  options?: string[]
+  display_order: number
+  is_active: boolean
+}
+
 export interface PublicFormInfo {
   form_id: string
   workspace_id: string
@@ -12,6 +27,7 @@ export interface PublicFormInfo {
   show_email: boolean
   show_source: boolean
   show_budget: boolean
+  custom_fields?: CustomFieldDefinition[]
 }
 
 export interface SubmitFormParams {
@@ -23,6 +39,7 @@ export interface SubmitFormParams {
   source?: string
   budget?: number
   honeypot?: string
+  custom_answers?: Record<string, string | boolean | number>
 }
 
 export interface SubmitFormResult {
@@ -42,6 +59,7 @@ export interface LeadFormConfig {
   show_email: boolean
   show_source: boolean
   show_budget: boolean
+  custom_fields?: CustomFieldDefinition[]
   submission_count: number
   created_at: string
   updated_at: string
@@ -55,6 +73,7 @@ export interface UpdateFormConfigParams {
   show_email: boolean
   show_source: boolean
   show_budget: boolean
+  custom_fields?: CustomFieldDefinition[]
 }
 
 async function callRpc<T>(fnName: string, params: Record<string, unknown>): Promise<T> {
@@ -87,6 +106,7 @@ export const formsApi = {
       p_source: params.source || null,
       p_budget: params.budget ?? null,
       p_honeypot: params.honeypot || null,
+      p_custom_answers: params.custom_answers || {},
     })
   },
 
@@ -94,7 +114,7 @@ export const formsApi = {
   getWorkspaceLeadForm: async (workspaceId: string): Promise<LeadFormConfig | null> => {
     if (!supabase) return null
     const { data, error } = await supabase
-      .from('lead_forms')
+      .from('lead_forms' as never)
       .select('*')
       .eq('workspace_id', workspaceId)
       .single()
@@ -109,7 +129,7 @@ export const formsApi = {
 
         if (seeded) {
           const { data: fresh } = await supabase
-            .from('lead_forms')
+            .from('lead_forms' as never)
             .select('*')
             .eq('workspace_id', workspaceId)
             .single()
@@ -135,6 +155,7 @@ export const formsApi = {
       p_show_email: params.show_email,
       p_show_source: params.show_source,
       p_show_budget: params.show_budget,
+      p_custom_fields: params.custom_fields || [],
     })
   },
 }

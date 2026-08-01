@@ -356,6 +356,63 @@ export const LeadDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* PUBLIC FORM SUBMISSION DETAILS */}
+      {(lead as unknown as { public_form_data?: Record<string, unknown> })?.public_form_data && (
+        <Card
+          title="Public Form Submission Details"
+          subtitle="Captured via public inquiry form with client responses"
+        >
+          {(() => {
+            const formData = (lead as unknown as { public_form_data?: {
+              form_title?: string
+              source_detail?: string
+              submitted_at?: string
+              answers?: Record<string, { label: string; type: string; value: string | boolean | number }>
+            } }).public_form_data
+
+            const answersObj = formData?.answers || {}
+            const answerEntries = Object.entries(answersObj)
+
+            return (
+              <div className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border border-surface-border rounded-xl">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-content-secondary block">Form Title</span>
+                    <span className="font-bold text-navy-900">{formData?.form_title || 'Public Inquiry Form'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-content-secondary block">Source / Channel</span>
+                    <span className="font-semibold text-brand-blue">{formData?.source_detail || 'Direct Link'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-content-secondary block">Submission Time</span>
+                    <span className="font-medium text-navy-900">
+                      {formData?.submitted_at ? new Date(formData.submitted_at).toLocaleString() : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {answerEntries.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <h4 className="font-bold text-xs text-navy-900 uppercase tracking-wider">Custom Questions & Answers</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {answerEntries.map(([key, item]) => (
+                        <div key={key} className="p-3 bg-white border border-surface-border/80 rounded-xl space-y-1">
+                          <span className="text-[11px] font-bold text-content-secondary block">{item.label || key}</span>
+                          <span className="font-medium text-navy-900 block text-xs">
+                            {typeof item.value === 'boolean' ? (item.value ? 'Yes' : 'No') : String(item.value || '—')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </Card>
+      )}
+
       {/* SUMMARY GRID */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
         <div className="p-3 bg-surface-card border border-surface-border rounded-lg">
