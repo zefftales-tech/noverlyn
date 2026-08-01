@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState, useCallback } from 'react'
+import React, { createContext, useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import type { Database, WorkspaceRole } from '../types/database.types'
@@ -15,6 +15,8 @@ export interface WorkspaceContextType {
   currentRole: WorkspaceRole | null
   workspaces: WorkspaceWithRole[]
   loading: boolean
+  hasCompletedInitialBootstrap: boolean
+  isBackgroundRefreshing: boolean
   needsOnboarding: boolean
   error: string | null
   switchWorkspace: (workspaceId: string) => void
@@ -38,18 +40,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null)
   const [currentRole, setCurrentRole] = useState<WorkspaceRole | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasCompletedInitialBootstrap, setHasCompletedInitialBootstrap] = useState(false)
+  const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadWorkspaces = useCallback(async () => {
+  const hasBootstrappedRef = useRef(false)
+
+  const loadWorkspaces = useCallback(async (isSilentBackground: boolean = false) => {
     if (!user || !isSupabaseConfigured || !supabase) {
       setWorkspaces([])
       setCurrentWorkspace(null)
       setCurrentRole(null)
       setLoading(false)
+      setHasCompletedInitialBootstrap(true)
+      hasBootstrappedRef.current = true
       return
     }
 
-    setLoading(true)
+    if (isSilentBackground || hasBootstrappedRef.current) {
+      setIsBackgroundRefreshing(true)
+    } else {
+      setLoading(true)
+    }
 
     try {
       // 1. Fetch active workspace memberships for the authenticated user
@@ -78,12 +90,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY)
         setError(null)
         setLoading(false)
+        setHasCompletedInitialBootstrap(true)
+        hasBootstrappedRef.current = true
+        setIsBackgroundRefreshing(false)
         return
       }
 
       const workspaceIds = memsData.map((m) => m.workspace_id)
 
-      // 2. Fetch workspace details separately to avoid embedded relation failures
+      // 2. Fetch workspace details separately
       const { data: wsData, error: wsErr } = await supabase
         .from('workspaces')
         .select('*')
@@ -133,6 +148,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setError(errorMsg)
     } finally {
       setLoading(false)
+      setHasCompletedInitialBootstrap(true)
+      hasBootstrappedRef.current = true
+      setIsBackgroundRefreshing(false)
     }
   }, [user])
 
@@ -140,20 +158,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let isSubscribed = true
 
     const runEffect = async () => {
-      // If auth session is still hydrating, keep workspace loading TRUE
-      if (authLoading) {
+      // If auth session is still hydrating on initial startup, keep workspace loading TRUE
+      if (authLoading && !hasBootstrappedRef.current) {
         setLoading(true)
         return
       }
 
       if (user && isSupabaseConfigured && supabase) {
-        await loadWorkspaces()
+        await loadWorkspaces(hasBootstrappedRef.current)
       } else {
         if (!isSubscribed) return
         setWorkspaces([])
         setCurrentWorkspace(null)
         setCurrentRole(null)
         setLoading(false)
+        setHasCompletedInitialBootstrap(true)
+        hasBootstrappedRef.current = true
       }
     }
 
@@ -188,7 +208,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const { data, error: rpcErr } = await (supabase.rpc as unknown as (
         fnName: string,
         params: { p_name: string; p_slug: string; p_timezone: string; p_currency: string; p_business_type: string }
-      ) => Promise<{ data: unknown; error: Error | null }>)( 'create_workspace', {
+      ) => Promise<{ data: unknown; error: Error | null }>)('create_workspace', {
         p_name: name,
         p_slug: slug,
         p_timezone: timezone,
@@ -201,7 +221,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const created = data as { id: string }
       if (created && created.id) {
         localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, created.id)
-        await loadWorkspaces()
+        await loadWorkspaces(true)
         return { workspaceId: created.id, error: null }
       }
 
@@ -213,7 +233,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }
 
-  const needsOnboarding = !authLoading && !loading && user !== null && workspaces.length === 0
+  const needsOnboarding = hasCompletedInitialBootstrap && !authLoading && user !== null && workspaces.length === 0
 
   return (
     <WorkspaceContext.Provider
@@ -221,12 +241,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         currentWorkspace,
         currentRole,
         workspaces,
-        loading: authLoading || loading,
+        loading: (!hasCompletedInitialBootstrap && (authLoading || loading)),
+        hasCompletedInitialBootstrap,
+        isBackgroundRefreshing,
         needsOnboarding,
         error,
         switchWorkspace,
         createWorkspace,
-        reloadWorkspaces: loadWorkspaces,
+        reloadWorkspaces: () => loadWorkspaces(true),
       }}
     >
       {children}

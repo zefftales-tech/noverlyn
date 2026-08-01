@@ -362,9 +362,17 @@ export const SettingsPage: React.FC = () => {
                 <Badge variant="blue">{getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type).title}</Badge>
               </div>
 
-              <p className="text-[11px] text-content-muted">
-                Business vertical templates configure default pipeline stages, labels, and terminology. To migrate your workspace template, please contact Support.
-              </p>
+              <div className="pt-3 border-t border-surface-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-navy-900 block">Progressive Web App (PWA)</span>
+                    <span className="text-[11px] text-content-secondary">
+                      Install Noverlyn on your mobile device or desktop for fast, native-like access.
+                    </span>
+                  </div>
+                  <Badge variant="success">PWA Ready</Badge>
+                </div>
+              </div>
 
               <div className="pt-2 border-t border-surface-border flex items-center justify-between text-[11px] text-content-secondary">
                 <span>Platform Version: <strong className="text-navy-900">{APP_CONFIG.appName} {APP_CONFIG.version}</strong></span>

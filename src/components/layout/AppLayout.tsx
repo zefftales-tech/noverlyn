@@ -2,12 +2,18 @@ import React, { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { PwaInstallPrompt } from '../pwa/PwaInstallPrompt'
+import { PwaUpdateBanner } from '../pwa/PwaUpdateBanner'
+import { OfflineBanner } from '../pwa/OfflineBanner'
 
 export const AppLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-surface-bg flex flex-col">
+    <div className="min-h-screen bg-surface-bg flex flex-col pt-safe pb-safe">
+      <OfflineBanner />
+      <PwaUpdateBanner />
+
       {/* Navigation Sidebar */}
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
 
@@ -18,6 +24,8 @@ export const AppLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      <PwaInstallPrompt />
     </div>
   )
 }

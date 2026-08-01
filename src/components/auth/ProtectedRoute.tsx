@@ -6,9 +6,10 @@ import { AppLoadingScreen } from '../ui/AppLoadingScreen'
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth()
-  const { currentWorkspace, loading: wsLoading } = useWorkspace()
+  const { currentWorkspace, loading: wsLoading, hasCompletedInitialBootstrap } = useWorkspace()
 
-  if (authLoading || wsLoading) {
+  // Only show full-screen AppLoadingScreen during INITIAL page bootstrap
+  if (!hasCompletedInitialBootstrap && (authLoading || wsLoading)) {
     return <AppLoadingScreen message="Loading your workspace..." />
   }
 
@@ -16,7 +17,7 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
     return <Navigate to="/login" replace />
   }
 
-  if (!currentWorkspace) {
+  if (!currentWorkspace && hasCompletedInitialBootstrap) {
     return <Navigate to="/onboarding" replace />
   }
 
