@@ -10,12 +10,15 @@ import { supabase } from '../lib/supabase'
 import { notificationsApi, type NotificationPreferences } from '../lib/notificationsApi'
 import { getTemplateForBusinessType } from '../lib/templates'
 import { APP_CONFIG } from '../lib/config'
-import { Sliders, Clock, Globe, Save, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Sliders, Clock, Globe, Save, CheckCircle2, AlertCircle, Building2, Bell, Smartphone } from 'lucide-react'
+
+type SettingsTab = 'workspace' | 'attention' | 'notifications' | 'platform'
 
 export const SettingsPage: React.FC = () => {
   const { currentWorkspace, currentRole, reloadWorkspaces } = useWorkspace()
   const { user } = useAuth()
 
+  const [activeTab, setActiveTab] = useState<SettingsTab>('workspace')
   const [name, setName] = useState('')
   const [timezone, setTimezone] = useState('UTC')
   const [currency, setCurrency] = useState('USD')
@@ -126,7 +129,7 @@ export const SettingsPage: React.FC = () => {
         await reloadWorkspaces()
       }
 
-      setSuccessMsg('Settings and notification preferences updated successfully!')
+      setSuccessMsg('Settings and preferences updated successfully!')
     } catch (err: unknown) {
       console.error('Error saving settings:', err)
       const msg = err instanceof Error ? err.message : 'Failed to save settings'
@@ -158,8 +161,15 @@ export const SettingsPage: React.FC = () => {
     { value: 'CAD', label: 'CAD (C$) - Canadian Dollar' },
   ]
 
+  const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
+    { id: 'workspace', label: 'Workspace Profile', icon: <Building2 className="w-4 h-4" /> },
+    { id: 'attention', label: 'Lead & Attention Rules', icon: <Clock className="w-4 h-4" /> },
+    { id: 'notifications', label: 'Notifications & Alerts', icon: <Bell className="w-4 h-4" /> },
+    { id: 'platform', label: 'Platform & PWA', icon: <Smartphone className="w-4 h-4" /> },
+  ]
+
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto px-1 sm:px-2">
+    <div className="space-y-6 max-w-[1200px] mx-auto px-1 sm:px-2">
       {/* Page Header */}
       <div className="pb-3 border-b border-surface-border flex items-center justify-between">
         <div>
@@ -192,11 +202,30 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Structured Category Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-surface-border overflow-x-auto pb-1 text-xs select-none">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 py-2.5 px-4 font-semibold rounded-t-xl transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-navy-900 text-white shadow-xs'
+                : 'text-content-secondary hover:text-navy-900 hover:bg-slate-100'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
       <form onSubmit={handleSaveSettings} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Workspace Identity */}
+        {/* Tab 1: Workspace Profile */}
+        {activeTab === 'workspace' && (
           <Card title="Workspace General Settings" subtitle="Core company name, default currency, and operational timezone">
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-xl">
               <Input
                 label="Workspace Name *"
                 type="text"
@@ -223,99 +252,15 @@ export const SettingsPage: React.FC = () => {
               />
             </div>
           </Card>
+        )}
 
-          {/* Notification Preferences Card */}
-          <Card
-            title="Notification & Alert Preferences"
-            subtitle="Configure which in-app operational alerts and reminders you receive."
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Public Form Lead Ingestion Alerts</span>
-                  <span className="text-[11px] text-content-secondary">Alert when a visitor submits a public inquiry form.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.public_form_alerts}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, public_form_alerts: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Lead Assignment Alerts</span>
-                  <span className="text-[11px] text-content-secondary">Alert when a lead is assigned to you.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.assignment_alerts}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, assignment_alerts: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Follow-up Due Today Reminders</span>
-                  <span className="text-[11px] text-content-secondary">Alert when scheduled follow-ups reach their due date.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.followup_due_alerts}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, followup_due_alerts: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Overdue Follow-up Alerts</span>
-                  <span className="text-[11px] text-content-secondary">Alert when follow-ups pass their due date without completion.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.overdue_alerts}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, overdue_alerts: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Deal Won / Lost Alerts</span>
-                  <span className="text-[11px] text-content-secondary">Alert when deals are closed as Won or marked Lost.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.won_lost_alerts}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, won_lost_alerts: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
-                <div>
-                  <span className="text-xs font-bold text-navy-900 block">Daily Morning Digest</span>
-                  <span className="text-[11px] text-content-secondary">Receive a daily operational summary of due work and attention items.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPrefs.daily_digest_enabled}
-                  onChange={(e) => setNotifPrefs({ ...notifPrefs, daily_digest_enabled: e.target.checked })}
-                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue"
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Attention Engine Operational Thresholds */}
+        {/* Tab 2: Lead & Attention Rules */}
+        {activeTab === 'attention' && (
           <Card
             title="Attention Engine Operational Thresholds"
             subtitle="Configure workspace thresholds for staleness and contact urgency"
           >
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-xl">
               <Input
                 label="Hot Lead Inactivity Threshold (Hours)"
                 type="number"
@@ -348,11 +293,101 @@ export const SettingsPage: React.FC = () => {
               />
             </div>
           </Card>
+        )}
 
-          {/* Business Vertical Template Info & Version */}
+        {/* Tab 3: Notifications & Alerts */}
+        {activeTab === 'notifications' && (
+          <Card
+            title="Notification & Alert Preferences"
+            subtitle="Configure which in-app operational alerts and reminders you receive."
+          >
+            <div className="space-y-3 max-w-2xl">
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Public Form Lead Ingestion Alerts</span>
+                  <span className="text-[11px] text-content-secondary">Alert when a visitor submits a public inquiry form.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.public_form_alerts}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, public_form_alerts: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Lead Assignment Alerts</span>
+                  <span className="text-[11px] text-content-secondary">Alert when a lead is assigned to you.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.assignment_alerts}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, assignment_alerts: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Follow-up Due Today Reminders</span>
+                  <span className="text-[11px] text-content-secondary">Alert when scheduled follow-ups reach their due date.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.followup_due_alerts}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, followup_due_alerts: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Overdue Follow-up Alerts</span>
+                  <span className="text-[11px] text-content-secondary">Alert when follow-ups pass their due date without completion.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.overdue_alerts}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, overdue_alerts: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Deal Won / Lost Alerts</span>
+                  <span className="text-[11px] text-content-secondary">Alert when deals are closed as Won or marked Lost.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.won_lost_alerts}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, won_lost_alerts: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border border-surface-border/60 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-navy-900 block">Daily Morning Digest</span>
+                  <span className="text-[11px] text-content-secondary">Receive a daily operational summary of due work and attention items.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.daily_digest_enabled}
+                  onChange={(e) => setNotifPrefs({ ...notifPrefs, daily_digest_enabled: e.target.checked })}
+                  className="w-4 h-4 text-brand-blue rounded border-surface-border focus:ring-brand-blue cursor-pointer"
+                />
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Tab 4: Platform & PWA */}
+        {activeTab === 'platform' && (
           <Card title="Business Vertical & Application Info" subtitle="Workspace template and platform release information">
-            <div className="space-y-4 text-xs">
-              <div className="p-3.5 bg-slate-50 border border-surface-border rounded-lg flex items-center justify-between">
+            <div className="space-y-4 max-w-2xl text-xs">
+              <div className="p-3.5 bg-slate-50 border border-surface-border rounded-xl flex items-center justify-between">
                 <div>
                   <span className="font-bold text-navy-900 block">Workspace Vertical Template</span>
                   <span className="text-[11px] text-content-secondary mt-0.5 block">
@@ -362,16 +397,14 @@ export const SettingsPage: React.FC = () => {
                 <Badge variant="blue">{getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type).title}</Badge>
               </div>
 
-              <div className="pt-3 border-t border-surface-border space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-navy-900 block">Progressive Web App (PWA)</span>
-                    <span className="text-[11px] text-content-secondary">
-                      Install Noverlyn on your mobile device or desktop for fast, native-like access.
-                    </span>
-                  </div>
-                  <Badge variant="success">PWA Ready</Badge>
+              <div className="p-3.5 bg-slate-50 border border-surface-border rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-navy-900 block">Progressive Web App (PWA) Status</span>
+                  <span className="text-[11px] text-content-secondary">
+                    Install Noverlyn on your mobile device or desktop for fast, native-like access.
+                  </span>
                 </div>
+                <Badge variant="success">PWA Ready</Badge>
               </div>
 
               <div className="pt-2 border-t border-surface-border flex items-center justify-between text-[11px] text-content-secondary">
@@ -380,7 +413,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           </Card>
-        </div>
+        )}
 
         <div className="flex justify-end pt-4 border-t border-surface-border">
           <Button variant="primary" type="submit" isLoading={saving || loading} icon={<Save className="w-4 h-4" />}>

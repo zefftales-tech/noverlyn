@@ -19,15 +19,16 @@ import {
   Clock,
   Flame,
   UserX,
-  TrendingUp,
   ArrowUpRight,
   CheckCircle2,
   PhoneCall,
   Activity,
-  AlertCircle,
   Users,
-  Check,
-  GitPullRequest
+  GitPullRequest,
+  Inbox,
+  DollarSign,
+  Trophy,
+  RefreshCw
 } from 'lucide-react'
 import { FirstRunChecklist } from '../../components/dashboard/FirstRunChecklist'
 
@@ -41,9 +42,11 @@ export const DashboardPage: React.FC = () => {
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([])
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({})
   const [teamStats, setTeamStats] = useState<Array<{ name: string; activeCount: number }>>([])
-  const [lostCount, setLostCount] = useState<number>(0)
-  const [lostReasons, setLostReasons] = useState<Record<string, number>>({})
-  const [highValueThreshold, setHighValueThreshold] = useState<number | null>(null)
+  const [pendingFormCount, setPendingFormCount] = useState<number>(0)
+  const [pipelineTotalValue, setPipelineTotalValue] = useState<number>(0)
+  const [wonCount, setWonCount] = useState<number>(0)
+  const [wonTotalValue, setWonTotalValue] = useState<number>(0)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date())
 
   const activeTemplate = getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type)
 
@@ -56,21 +59,22 @@ export const DashboardPage: React.FC = () => {
       const items = await fetchWorkspaceAttentionItems(currentWorkspace.id)
       setAttentionItems(items)
 
-      // 2. Fetch Workspace Settings
-      const { data: settingsData } = await supabase
-        .from('workspace_settings')
-        .select('*')
+      // 2. Fetch Pending Form Submissions Count
+      const { count: pCount } = await supabase
+        .from('public_form_submissions')
+        .select('*', { count: 'exact', head: true })
         .eq('workspace_id', currentWorkspace.id)
-        .single()
+        .eq('status', 'pending')
 
-      const ws = settingsData as Database['public']['Tables']['workspace_settings']['Row'] | null
-      setHighValueThreshold(ws?.high_value_threshold ?? null)
+      setPendingFormCount(pCount || 0)
 
-      // 3. Fetch Leads for Stage & Lost Stats
+      // 4. Fetch Leads for Stage & Value Metrics
       const { data: allLeads } = await supabase
         .from('leads')
         .select('*')
         .eq('workspace_id', currentWorkspace.id)
+        .is('deleted_at', null)
+        .is('archived_at', null)
 
       const leadsList = (allLeads || []) as Lead[]
 
@@ -79,8 +83,9 @@ export const DashboardPage: React.FC = () => {
         sCounts[stg.key] = 0
       })
 
-      let lostTotal = 0
-      const lostReasonsMap: Record<string, number> = {}
+      let totalVal = 0
+      let wonCnt = 0
+      let wonVal = 0
 
       leadsList.forEach((l) => {
         if (sCounts[l.stage] !== undefined) {
@@ -89,19 +94,22 @@ export const DashboardPage: React.FC = () => {
           sCounts[l.stage] = (sCounts[l.stage] || 0) + 1
         }
 
-        if (l.stage === 'lost' || l.status === 'lost') {
-          lostTotal += 1
-          if (l.lost_reason) {
-            lostReasonsMap[l.lost_reason] = (lostReasonsMap[l.lost_reason] || 0) + 1
-          }
+        if (l.estimated_value) {
+          totalVal += l.estimated_value
+        }
+
+        if (l.stage === 'won' || l.status === 'won') {
+          wonCnt += 1
+          if (l.estimated_value) wonVal += l.estimated_value
         }
       })
 
       setStageCounts(sCounts)
-      setLostCount(lostTotal)
-      setLostReasons(lostReasonsMap)
+      setPipelineTotalValue(totalVal)
+      setWonCount(wonCnt)
+      setWonTotalValue(wonVal)
 
-      // 4. Fetch Members & Active Leads count per agent
+      // 5. Fetch Members & Active Leads count per agent
       const { data: mems } = await supabase
         .from('workspace_members')
         .select('user_id')
@@ -135,6 +143,8 @@ export const DashboardPage: React.FC = () => {
       } else {
         setTeamStats([])
       }
+
+      setLastRefreshedAt(new Date())
     } catch (err) {
       console.error('Error loading dashboard data:', err)
     } finally {
@@ -161,27 +171,49 @@ export const DashboardPage: React.FC = () => {
   const dueTodayCount = attentionItems.filter((i) => i.primary_issue === 'due_today').length
   const hotRiskCount = attentionItems.filter((i) => i.primary_issue === 'hot_lead_inactive').length
   const unassignedCount = attentionItems.filter((i) => i.primary_issue === 'unassigned_lead').length
-  const highValueRiskCount = attentionItems.filter((i) => i.primary_issue === 'high_value_at_risk').length
 
   const totalActiveLeads = Object.values(stageCounts).reduce((acc, c) => acc + c, 0) || 1
   const maxTeamLeads = Math.max(...teamStats.map((t) => t.activeCount), 1)
 
   return (
     <div className="space-y-7 max-w-[1600px] mx-auto px-1 sm:px-2">
-      {/* A. PAGE HEADER */}
-      <div className="pb-3 border-b border-surface-border/60">
-        <h1 className="font-heading font-bold text-3xl text-navy-900 tracking-tight">
-          Operations Overview
-        </h1>
-        <p className="text-sm text-content-secondary mt-1">
-          See what needs attention, how your pipeline is moving, and where your team should focus today.
-        </p>
+      {/* A. PAGE HEADER WITH CONTEXT & ACTIONS */}
+      <div className="pb-3 border-b border-surface-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-heading font-bold text-3xl text-navy-900 tracking-tight">
+            Operations Overview
+          </h1>
+          <p className="text-sm text-content-secondary mt-1 flex items-center gap-2 flex-wrap">
+            <span>See what needs attention, pipeline progress, and agent workload today.</span>
+            <span className="text-[11px] text-content-muted flex items-center gap-1 font-mono">
+              <RefreshCw className="w-3 h-3" /> Updated {lastRefreshedAt.toLocaleTimeString([], { timeStyle: 'short' })}
+            </span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<ArrowUpRight className="w-3.5 h-3.5" />}
+            onClick={() => navigate('/work-queue')}
+          >
+            Work Queue
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate('/leads')}
+          >
+            All Leads
+          </Button>
+        </div>
       </div>
 
       {/* FIRST-RUN ONBOARDING CHECKLIST */}
       <FirstRunChecklist />
 
-      {/* B. KPI ROW (5 PREMIUM CARDS) */}
+      {/* B. OPERATIONAL ACTIONABLE KPIS (5 CARDS) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -225,7 +257,24 @@ export const DashboardPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Card 3: Hot Leads At Risk */}
+          {/* Card 3: Pending Form Reviews */}
+          <div
+            onClick={() => navigate('/lead-forms/review')}
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-amber-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Pending Reviews</span>
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-status-warning flex items-center justify-center shrink-0">
+                <Inbox className="w-4.5 h-4.5" />
+              </div>
+            </div>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{pendingFormCount}</div>
+            <p className="text-xs text-content-secondary">
+              {pendingFormCount > 0 ? `${pendingFormCount} form submissions awaiting review` : 'Review Inbox empty'}
+            </p>
+          </div>
+
+          {/* Card 4: Hot Leads At Risk */}
           <div
             onClick={() => navigate('/work-queue?filter=at_risk')}
             className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-amber-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
@@ -242,7 +291,7 @@ export const DashboardPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Card 4: Unassigned Leads */}
+          {/* Card 5: Unassigned Leads */}
           <div
             onClick={() => navigate('/work-queue?filter=unassigned')}
             className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-indigo-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
@@ -258,32 +307,53 @@ export const DashboardPage: React.FC = () => {
               {unassignedCount > 0 ? `${unassignedCount} awaiting agent` : 'All leads assigned'}
             </p>
           </div>
-
-          {/* Card 5: High-Value At Risk */}
-          <div
-            onClick={() => navigate('/work-queue?filter=at_risk')}
-            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-emerald-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">High-Value At Risk</span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4.5 h-4.5" />
-              </div>
-            </div>
-            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{highValueRiskCount}</div>
-            <p className="text-xs text-content-secondary">
-              {highValueThreshold
-                ? `>= ${currentWorkspace?.currency || 'USD'} ${highValueThreshold.toLocaleString()}`
-                : 'High-value deals needing action'}
-            </p>
-          </div>
         </div>
       </section>
 
-      {/* C. PRIORITY ACTIONS */}
+      {/* C. SECONDARY REVENUE & PIPELINE SUMMARY ROW */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 flex items-center justify-between shadow-2xs">
+          <div>
+            <span className="text-xs font-semibold text-content-secondary">Total Active Leads</span>
+            <div className="text-2xl font-bold text-navy-900 mt-1">{totalActiveLeads}</div>
+            <span className="text-[11px] text-content-muted">Active opportunities in pipeline</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-brand-blue flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 flex items-center justify-between shadow-2xs">
+          <div>
+            <span className="text-xs font-semibold text-content-secondary">Active Pipeline Value</span>
+            <div className="text-2xl font-bold text-navy-900 mt-1">
+              {currentWorkspace?.currency || 'USD'} {pipelineTotalValue.toLocaleString()}
+            </div>
+            <span className="text-[11px] text-content-muted">Total value of open opportunities</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 flex items-center justify-between shadow-2xs">
+          <div>
+            <span className="text-xs font-semibold text-content-secondary">Closed Won Deals</span>
+            <div className="text-2xl font-bold text-navy-900 mt-1">
+              {wonCount} <span className="text-xs font-normal text-content-secondary">({currentWorkspace?.currency || 'USD'} {wonTotalValue.toLocaleString()})</span>
+            </div>
+            <span className="text-[11px] text-content-muted">Successfully closed opportunities</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-status-warning flex items-center justify-center shrink-0">
+            <Trophy className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* D. PRIORITY ACTIONS TABLE & MOBILE CARDS */}
       <Card
-        title="Priority Actions"
-        subtitle="The leads and follow-ups that need attention first."
+        title="Priority Work Queue"
+        subtitle="Operational leads and follow-ups requiring attention first."
         action={
           <Button variant="primary" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />} onClick={() => navigate('/work-queue')}>
             Open Work Queue
@@ -295,63 +365,104 @@ export const DashboardPage: React.FC = () => {
             You're all caught up! No priority items currently require attention.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-surface-border/60 bg-slate-50/60 text-content-secondary font-semibold text-xs">
-                  <th className="py-3.5 px-6">Priority</th>
-                  <th className="py-3.5 px-6">Lead</th>
-                  <th className="py-3.5 px-6">Reason</th>
-                  <th className="py-3.5 px-6">Value</th>
-                  <th className="py-3.5 px-6">Next Action</th>
-                  <th className="py-3.5 px-6 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-border/50">
-                {attentionItems.slice(0, 6).map((item) => (
-                  <tr key={item.lead_id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6">
-                      <Badge variant={getUrgencyBadgeVariant(item.urgency_level)} size="sm">
-                        {item.urgency_level}
-                      </Badge>
-                    </td>
-
-                    <td className="py-4 px-6 font-bold text-navy-900">
-                      <span onClick={() => navigate(`/leads/${item.lead_id}`)} className="hover:text-brand-blue cursor-pointer transition-colors">
-                        {item.lead_name}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <span className="font-semibold text-navy-900">{item.primary_issue_label}</span>
-                      <p className="text-xs text-content-secondary mt-0.5">{item.primary_issue_detail}</p>
-                    </td>
-
-                    <td className="py-4 px-6 font-semibold text-navy-900">
-                      {item.estimated_value ? `${currentWorkspace?.currency || 'USD'} ${item.estimated_value.toLocaleString()}` : '—'}
-                    </td>
-
-                    <td className="py-4 px-6 font-medium text-content-secondary">{item.next_action}</td>
-
-                    <td className="py-4 px-6 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        icon={<PhoneCall className="w-3 h-3 text-brand-blue" />}
-                        onClick={() => navigate(`/leads/${item.lead_id}`)}
-                      >
-                        Open Lead
-                      </Button>
-                    </td>
+          <div className="space-y-3">
+            {/* Desktop Table View */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-surface-border/60 bg-slate-50/60 text-content-secondary font-semibold text-xs">
+                    <th className="py-3.5 px-6">Priority</th>
+                    <th className="py-3.5 px-6">Lead</th>
+                    <th className="py-3.5 px-6">Reason</th>
+                    <th className="py-3.5 px-6">Value</th>
+                    <th className="py-3.5 px-6">Next Action</th>
+                    <th className="py-3.5 px-6 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-surface-border/50">
+                  {attentionItems.slice(0, 6).map((item) => (
+                    <tr key={item.lead_id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-4 px-6">
+                        <Badge variant={getUrgencyBadgeVariant(item.urgency_level)} size="sm">
+                          {item.urgency_level}
+                        </Badge>
+                      </td>
+
+                      <td className="py-4 px-6 font-bold text-navy-900">
+                        <span onClick={() => navigate(`/leads/${item.lead_id}`)} className="hover:text-brand-blue cursor-pointer transition-colors">
+                          {item.lead_name}
+                        </span>
+                      </td>
+
+                      <td className="py-4 px-6">
+                        <span className="font-semibold text-navy-900">{item.primary_issue_label}</span>
+                        <p className="text-xs text-content-secondary mt-0.5">{item.primary_issue_detail}</p>
+                      </td>
+
+                      <td className="py-4 px-6 font-semibold text-navy-900">
+                        {item.estimated_value ? `${currentWorkspace?.currency || 'USD'} ${item.estimated_value.toLocaleString()}` : '—'}
+                      </td>
+
+                      <td className="py-4 px-6 font-medium text-content-secondary">{item.next_action}</td>
+
+                      <td className="py-4 px-6 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={<PhoneCall className="w-3 h-3 text-brand-blue" />}
+                          onClick={() => navigate(`/leads/${item.lead_id}`)}
+                        >
+                          Open Lead
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Responsive Cards */}
+            <div className="lg:hidden space-y-3">
+              {attentionItems.slice(0, 6).map((item) => (
+                <div key={item.lead_id} className="p-4 bg-slate-50/70 border border-surface-border/80 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span onClick={() => navigate(`/leads/${item.lead_id}`)} className="font-bold text-navy-900 text-sm hover:text-brand-blue cursor-pointer">
+                      {item.lead_name}
+                    </span>
+                    <Badge variant={getUrgencyBadgeVariant(item.urgency_level)} size="sm">
+                      {item.urgency_level}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1 pt-1 border-t border-surface-border/60">
+                    <div>
+                      <span className="text-[11px] text-content-muted block font-medium">Issue</span>
+                      <span className="font-semibold text-navy-900">{item.primary_issue_label}</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-content-muted block font-medium">Next Action</span>
+                      <span className="text-content-secondary">{item.next_action}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<PhoneCall className="w-3 h-3 text-brand-blue" />}
+                      onClick={() => navigate(`/leads/${item.lead_id}`)}
+                    >
+                      Open Lead
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Card>
 
-      {/* D. PIPELINE OVERVIEW (2-COLUMN COMPACT GRID) + TEAM WORKLOAD */}
+      {/* E. PIPELINE OVERVIEW & TEAM WORKLOAD */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* PIPELINE OVERVIEW */}
         <Card
@@ -386,7 +497,7 @@ export const DashboardPage: React.FC = () => {
               })}
             </div>
 
-            {/* 2-Column Compact Stage Grid on Desktop */}
+            {/* 2-Column Compact Stage Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {activeTemplate.stages.map((stg) => {
                 const count = stageCounts[stg.key] || 0
@@ -452,49 +563,6 @@ export const DashboardPage: React.FC = () => {
           )}
         </Card>
       </div>
-
-      {/* E. LOST OPPORTUNITIES */}
-      {lostCount === 0 ? (
-        <div className="bg-surface-card border border-surface-border/80 rounded-2xl p-5 shadow-saas flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-            <Check className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="font-heading font-bold text-sm text-navy-900">No lost opportunities recorded</h4>
-            <p className="text-xs text-content-secondary mt-0.5">
-              Lost deal intelligence and root-cause metrics will appear here once a deal is marked lost.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <Card title="Lost Opportunities" subtitle="Root-cause metrics for lost deals">
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-slate-50/80 border border-surface-border/60 rounded-xl gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-white border border-surface-border rounded-xl text-status-critical shadow-2xs">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-heading font-semibold text-sm text-navy-900">Total Lost Deals</h4>
-                  <p className="text-xs text-content-secondary">Recorded from mandatory loss reasons.</p>
-                </div>
-              </div>
-              <Badge variant="critical" className="font-bold text-sm px-3 py-1">{lostCount} Lost Deals</Badge>
-            </div>
-
-            {Object.keys(lostReasons).length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                {Object.entries(lostReasons).map(([reason, count]) => (
-                  <div key={reason} className="p-3.5 bg-red-50/40 border border-red-200/80 rounded-xl text-center space-y-1">
-                    <span className="text-xs font-semibold text-red-700 block truncate">{reason.replace('_', ' ')}</span>
-                    <span className="text-xl font-bold text-navy-900 block">{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
     </div>
   )
 }
