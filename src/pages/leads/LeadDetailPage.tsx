@@ -165,17 +165,6 @@ export const LeadDetailPage: React.FC = () => {
     }
   }
 
-  const handleOpenWhatsApp = () => {
-    if (!lead || !lead.phone) return
-    const parsedPhone = normalizePhoneNumber(lead.phone)
-    if (!parsedPhone.isValid) {
-      alert(`Invalid phone number for WhatsApp: ${lead.phone}. ${parsedPhone.warning || ''}`)
-      return
-    }
-    const url = generateWhatsAppUrl(lead.phone)
-    window.open(url, '_blank')
-  }
-
   if (loading) {
     return <Card><LoadingState label="Loading detailed lead record..." /></Card>
   }
@@ -346,11 +335,14 @@ export const LeadDetailPage: React.FC = () => {
           {/* Header Actions Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              href={phoneParsed.isValid ? generateWhatsAppUrl(lead.phone) : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
               variant="primary"
               size="sm"
               icon={<MessageSquare className="w-3.5 h-3.5 text-emerald-400" />}
-              onClick={handleOpenWhatsApp}
               disabled={!phoneParsed.isValid}
+              title={!phoneParsed.isValid ? 'Add a valid phone number with country code to open WhatsApp.' : undefined}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               Open in WhatsApp
@@ -617,11 +609,14 @@ export const LeadDetailPage: React.FC = () => {
                 action={
                   <div className="flex items-center gap-2">
                     <Button
+                      href={phoneParsed.isValid ? generateWhatsAppUrl(lead.phone) : undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       variant="primary"
                       size="sm"
                       icon={<ExternalLink className="w-4 h-4" />}
-                      onClick={handleOpenWhatsApp}
                       disabled={!phoneParsed.isValid}
+                      title={!phoneParsed.isValid ? 'Add a valid phone number with country code to open WhatsApp.' : undefined}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       Open in WhatsApp

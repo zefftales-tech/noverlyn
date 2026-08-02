@@ -70,10 +70,19 @@ export function generateWhatsAppUrl(phone: string, text?: string): string {
   if (!parsed.isValid) return '#'
 
   const baseUrl = `https://wa.me/${parsed.normalized}`
-  if (text && text.trim()) {
-    return `${baseUrl}?text=${encodeURIComponent(text.trim())}`
+  const finalUrl = text && text.trim() ? `${baseUrl}?text=${encodeURIComponent(text.trim())}` : baseUrl
+
+  if (import.meta.env.DEV) {
+    const isStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches
+    console.log('[WhatsApp URL Generated]', {
+      rawPhone: phone,
+      normalizedPhone: parsed.normalized,
+      finalUrl,
+      displayMode: isStandalone ? 'standalone (PWA)' : 'browser',
+    })
   }
-  return baseUrl
+
+  return finalUrl
 }
 
 /**
