@@ -363,77 +363,79 @@ export const ReviewInboxPage: React.FC = () => {
 
       {/* APPROVE MODAL */}
       {isApproveOpen && selectedSubmission && (
-        <div className="fixed inset-0 z-[120] bg-navy-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-surface-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-surface-border">
-              <h3 className="font-heading font-bold text-base text-navy-900">
+        <div className="fixed inset-0 z-[120] bg-navy-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white border border-surface-border rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[92dvh] sm:max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-150 pb-safe">
+            <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between shrink-0 bg-white">
+              <h3 className="font-heading font-bold text-base text-navy-900 truncate">
                 Approve & Create Lead — {selectedSubmission.full_name}
               </h3>
-              <button onClick={() => setIsApproveOpen(false)} className="text-slate-400 hover:text-navy-900">
+              <button onClick={() => setIsApproveOpen(false)} className="text-slate-400 hover:text-navy-900 p-1 shrink-0">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleExecuteApproval} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-semibold text-content-primary mb-1">Assign Agent (Optional)</label>
-                <select
-                  value={assignedTo}
-                  onChange={(e) => setAssignedTo(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>{m.fullName}</option>
-                  ))}
-                </select>
-              </div>
+            <form onSubmit={handleExecuteApproval} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4 text-xs">
+                <div>
+                  <label className="block text-xs font-semibold text-content-primary mb-1">Assign Agent (Optional)</label>
+                  <select
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                      <option key={m.userId} value={m.userId}>{m.fullName}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-content-primary mb-1">Priority</label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
-                >
-                  <option value="hot">HOT (High Urgency)</option>
-                  <option value="warm">WARM (Normal)</option>
-                  <option value="cold">COLD (Low Priority)</option>
-                </select>
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-content-primary mb-1">Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
+                  >
+                    <option value="hot">HOT (High Urgency)</option>
+                    <option value="warm">WARM (Normal)</option>
+                    <option value="cold">COLD (Low Priority)</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-content-primary mb-1">Initial Pipeline Stage</label>
-                <select
-                  value={selectedStage}
-                  onChange={(e) => setSelectedStage(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
-                >
-                  {stages.map((stg) => (
-                    <option key={stg.stage_key} value={stg.stage_key}>{stg.label}</option>
-                  ))}
-                </select>
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-content-primary mb-1">Initial Pipeline Stage</label>
+                  <select
+                    value={selectedStage}
+                    onChange={(e) => setSelectedStage(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-surface-border text-xs text-navy-900 bg-white"
+                  >
+                    {stages.map((stg) => (
+                      <option key={stg.stage_key} value={stg.stage_key}>{stg.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <Input
-                label="First Scheduled Follow-up Date (Optional)"
-                type="datetime-local"
-                value={nextFollowUpDate}
-                onChange={(e) => setNextFollowUpDate(e.target.value)}
-              />
-
-              <div>
-                <label className="block text-xs font-semibold text-content-primary mb-1">Internal Note (Optional)</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Verified phone number. Prefers morning contact."
-                  value={internalNote}
-                  onChange={(e) => setInternalNote(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-surface-border text-xs text-navy-900 placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                <Input
+                  label="First Scheduled Follow-up Date (Optional)"
+                  type="datetime-local"
+                  value={nextFollowUpDate}
+                  onChange={(e) => setNextFollowUpDate(e.target.value)}
                 />
+
+                <div>
+                  <label className="block text-xs font-semibold text-content-primary mb-1">Internal Note (Optional)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Verified phone number. Prefers morning contact."
+                    value={internalNote}
+                    onChange={(e) => setInternalNote(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-surface-border text-xs text-navy-900 placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                  />
+                </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="px-5 py-3.5 bg-slate-50 border-t border-surface-border flex justify-end gap-2 shrink-0">
                 <Button type="button" variant="outline" size="sm" onClick={() => setIsApproveOpen(false)}>
                   Cancel
                 </Button>

@@ -20,43 +20,46 @@ export interface EditLeadModalProps {
 export const EditLeadModal: React.FC<EditLeadModalProps> = ({ isOpen, onClose, lead, onSuccess }) => {
   const { currentWorkspace } = useWorkspace()
 
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [source, setSource] = useState('Website')
-  const [requirement, setRequirement] = useState('')
-  const [budgetMin, setBudgetMin] = useState('')
-  const [budgetMax, setBudgetMax] = useState('')
-  const [estimatedValue, setEstimatedValue] = useState('')
-  const [priority, setPriority] = useState<LeadPriority>('warm')
-  const [assignedTo, setAssignedTo] = useState('')
+  // Form State initialized directly from lead if provided
+  const [fullName, setFullName] = useState(lead?.full_name || '')
+  const [phone, setPhone] = useState(lead?.phone || '')
+  const [email, setEmail] = useState(lead?.email || '')
+  const [source, setSource] = useState(lead?.source || 'Website')
+  const [requirement, setRequirement] = useState(lead?.requirement || '')
+  const [budgetMin, setBudgetMin] = useState(lead?.budget_min ? String(lead.budget_min) : '')
+  const [budgetMax, setBudgetMax] = useState(lead?.budget_max ? String(lead.budget_max) : '')
+  const [estimatedValue, setEstimatedValue] = useState(lead?.estimated_value ? String(lead.estimated_value) : '')
+  const [priority, setPriority] = useState<LeadPriority>(lead?.priority || 'warm')
+  const [assignedTo, setAssignedTo] = useState(lead?.assigned_to || '')
 
+  // Members list
   const [members, setMembers] = useState<Array<{ userId: string; fullName: string }>>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (lead) {
-      Promise.resolve().then(() => {
-        setFullName(lead.full_name || '')
-        setPhone(lead.phone || '')
-        setEmail(lead.email || '')
-        setSource(lead.source || 'Website')
-        setRequirement(lead.requirement || '')
-        setBudgetMin(lead.budget_min ? String(lead.budget_min) : '')
-        setBudgetMax(lead.budget_max ? String(lead.budget_max) : '')
-        setEstimatedValue(lead.estimated_value ? String(lead.estimated_value) : '')
-        setPriority(lead.priority || 'warm')
-        setAssignedTo(lead.assigned_to || '')
-      })
-    }
-  }, [lead])
 
   useEffect(() => {
     if (isOpen && currentWorkspace) {
       leadsApi.getWorkspaceMembers(currentWorkspace.id).then(setMembers)
     }
   }, [isOpen, currentWorkspace])
+
+  // Sync state when lead changes via async microtask tick to avoid synchronous effect cascading render
+  useEffect(() => {
+    if (!lead) return
+    const timer = setTimeout(() => {
+      setFullName(lead.full_name || '')
+      setPhone(lead.phone || '')
+      setEmail(lead.email || '')
+      setSource(lead.source || 'Website')
+      setRequirement(lead.requirement || '')
+      setBudgetMin(lead.budget_min ? String(lead.budget_min) : '')
+      setBudgetMax(lead.budget_max ? String(lead.budget_max) : '')
+      setEstimatedValue(lead.estimated_value ? String(lead.estimated_value) : '')
+      setPriority(lead.priority || 'warm')
+      setAssignedTo(lead.assigned_to || '')
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [lead])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,6 +120,17 @@ export const EditLeadModal: React.FC<EditLeadModalProps> = ({ isOpen, onClose, l
     ...members.map((m) => ({ value: m.userId, label: m.fullName })),
   ]
 
+  const modalFooter = (
+    <>
+      <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
+        Cancel
+      </Button>
+      <Button variant="primary" type="submit" form="edit-lead-form" isLoading={loading} icon={<Check className="w-4 h-4" />}>
+        Save Lead Changes
+      </Button>
+    </>
+  )
+
   return (
     <Modal
       isOpen={isOpen}
@@ -124,8 +138,9 @@ export const EditLeadModal: React.FC<EditLeadModalProps> = ({ isOpen, onClose, l
       title="Edit Lead Information"
       subtitle={`Updating record for ${lead?.full_name}`}
       maxWidth="lg"
+      footer={modalFooter}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id="edit-lead-form" onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 bg-status-critical-bg border border-red-200 rounded-lg text-xs text-status-critical flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -213,15 +228,6 @@ export const EditLeadModal: React.FC<EditLeadModalProps> = ({ isOpen, onClose, l
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
           />
-        </div>
-
-        <div className="pt-4 flex justify-end gap-3 border-t border-surface-border">
-          <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit" isLoading={loading} icon={<Check className="w-4 h-4" />}>
-            Save Lead Changes
-          </Button>
         </div>
       </form>
     </Modal>

@@ -133,6 +133,17 @@ export const AddLeadModal: React.FC<AddLeadModalProps> = ({ isOpen, onClose, onS
     ...members.map((m) => ({ value: m.userId, label: m.fullName })),
   ]
 
+  const modalFooter = (
+    <>
+      <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
+        Cancel
+      </Button>
+      <Button variant="primary" type="submit" form="add-lead-form" isLoading={loading} icon={<Plus className="w-4 h-4" />}>
+        Create Lead Record
+      </Button>
+    </>
+  )
+
   return (
     <Modal
       isOpen={isOpen}
@@ -140,8 +151,9 @@ export const AddLeadModal: React.FC<AddLeadModalProps> = ({ isOpen, onClose, onS
       title="Create New Lead"
       subtitle={`Adding lead record to ${currentWorkspace?.name}`}
       maxWidth="lg"
+      footer={modalFooter}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id="add-lead-form" onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 bg-status-critical-bg border border-red-200 rounded-lg text-xs text-status-critical flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -289,15 +301,6 @@ export const AddLeadModal: React.FC<AddLeadModalProps> = ({ isOpen, onClose, onS
               />
             </div>
           )}
-        </div>
-
-        <div className="pt-4 flex justify-end gap-3 border-t border-surface-border">
-          <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit" isLoading={loading} icon={<Plus className="w-4 h-4" />}>
-            Create Lead Record
-          </Button>
         </div>
       </form>
     </Modal>
