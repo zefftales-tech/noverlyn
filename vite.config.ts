@@ -8,7 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'icons/*.svg'],
+      includeAssets: [
+        'favicon.svg',
+        'favicon-32x32.png',
+        'favicon-16x16.png',
+        'apple-touch-icon.png',
+        'icons/*.png',
+        'icons/*.svg',
+      ],
       manifest: {
         name: 'Noverlyn',
         short_name: 'Noverlyn',
@@ -21,16 +28,34 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: '/icons/pwa-icon.svg',
-            sizes: '192x192 512x512',
-            type: 'image/svg+xml',
+            src: '/icons/noverlyn-192.png',
+            sizes: '192x192',
+            type: 'image/png',
             purpose: 'any',
+          },
+          {
+            src: '/icons/noverlyn-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/noverlyn-maskable-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/noverlyn-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
           {
             src: '/icons/pwa-icon.svg',
             sizes: '192x192 512x512',
             type: 'image/svg+xml',
-            purpose: 'maskable',
+            purpose: 'any',
           },
         ],
       },
