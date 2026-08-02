@@ -28,7 +28,8 @@ import {
   Inbox,
   DollarSign,
   Trophy,
-  RefreshCw
+  RefreshCw,
+  MessageSquare
 } from 'lucide-react'
 import { FirstRunChecklist } from '../../components/dashboard/FirstRunChecklist'
 
@@ -43,6 +44,7 @@ export const DashboardPage: React.FC = () => {
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({})
   const [teamStats, setTeamStats] = useState<Array<{ name: string; activeCount: number }>>([])
   const [pendingFormCount, setPendingFormCount] = useState<number>(0)
+  const [needsWaResponseCount, setNeedsWaResponseCount] = useState<number>(0)
   const [pipelineTotalValue, setPipelineTotalValue] = useState<number>(0)
   const [wonCount, setWonCount] = useState<number>(0)
   const [wonTotalValue, setWonTotalValue] = useState<number>(0)
@@ -67,6 +69,17 @@ export const DashboardPage: React.FC = () => {
         .eq('status', 'pending')
 
       setPendingFormCount(pCount || 0)
+
+      // 3. Fetch Needs WhatsApp Response Count
+      const { count: waCount } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('communication_status', 'needs_response')
+        .is('deleted_at', null)
+        .is('archived_at', null)
+
+      setNeedsWaResponseCount(waCount || 0)
 
       // 4. Fetch Leads for Stage & Value Metrics
       const { data: allLeads } = await supabase
@@ -257,7 +270,24 @@ export const DashboardPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Card 3: Pending Form Reviews */}
+          {/* Card 3: Needs WhatsApp Response */}
+          <div
+            onClick={() => navigate('/work-queue?filter=needs_response')}
+            className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-emerald-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-content-secondary group-hover:text-navy-900 transition-colors">Needs WA Response</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-4.5 h-4.5" />
+              </div>
+            </div>
+            <div className="text-3xl font-bold font-heading text-navy-900 tracking-tight">{needsWaResponseCount}</div>
+            <p className="text-xs text-content-secondary">
+              {needsWaResponseCount > 0 ? `${needsWaResponseCount} unanswered messages` : 'All messages answered'}
+            </p>
+          </div>
+
+          {/* Card 4: Pending Form Reviews */}
           <div
             onClick={() => navigate('/lead-forms/review')}
             className="bg-surface-card p-5 rounded-2xl border border-surface-border/80 space-y-3 hover:border-amber-300 hover:shadow-saas cursor-pointer transition-all duration-150 ease-in-out group shadow-2xs"
