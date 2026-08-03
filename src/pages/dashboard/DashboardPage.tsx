@@ -71,7 +71,7 @@ export const DashboardPage: React.FC = () => {
       setPendingFormCount(pCount || 0)
 
       // 3. Fetch Needs WhatsApp Response Count
-      const { count: waCount } = await supabase
+      const { count: waLeadCount } = await supabase
         .from('leads')
         .select('*', { count: 'exact', head: true })
         .eq('workspace_id', currentWorkspace.id)
@@ -79,7 +79,7 @@ export const DashboardPage: React.FC = () => {
         .is('deleted_at', null)
         .is('archived_at', null)
 
-      setNeedsWaResponseCount(waCount || 0)
+      setNeedsWaResponseCount(waLeadCount || 0)
 
       // 4. Fetch Leads for Stage & Value Metrics
       const { data: allLeads } = await supabase
@@ -156,6 +156,15 @@ export const DashboardPage: React.FC = () => {
       } else {
         setTeamStats([])
       }
+
+      // Fetch WhatsApp Needs Response Conversation Count
+      const { count: waCount } = await supabase
+        .from('whatsapp_conversations' as never)
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', currentWorkspace.id)
+        .eq('needs_response', true)
+
+      setNeedsWaResponseCount(waCount || 0)
 
       setLastRefreshedAt(new Date())
     } catch (err) {

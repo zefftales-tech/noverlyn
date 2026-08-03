@@ -20,7 +20,9 @@ import {
   X,
   FileText,
   Archive,
-  Trash2
+  Trash2,
+  MessageSquare,
+  UserCheck
 } from 'lucide-react'
 
 import { getTemplateForBusinessType } from '../../lib/templates'
@@ -77,6 +79,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileCl
 
   const bottomNavItems = [
     { to: '/pipeline', label: 'Pipeline', icon: <GitPullRequest className="w-4 h-4" /> },
+    { to: '/whatsapp/inbox', label: 'WhatsApp Inbox', icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
+    ...(isOwnerOrManager
+      ? [{ to: '/whatsapp/review', label: 'Contact Reviews', icon: <UserCheck className="w-4 h-4 text-brand-blue" /> }]
+      : []),
     {
       to: '/lead-forms',
       label: 'Lead Forms',

@@ -28,74 +28,62 @@ export function normalizePhoneNumber(rawPhone: string): NormalizedPhone {
   // Remove spaces, dashes, parentheses, dots, and plus signs
   const digitsOnly = rawPhone.replace(/[\s()+\-.]/g, '')
 
-  // Reject invalid non-numeric strings
-  if (!/^\d+$/.test(digitsOnly)) {
-    return {
-      raw: rawPhone,
-      normalized: '',
-      isValid: false,
-      hasCountryCode: false,
-      warning: 'Phone number contains invalid characters',
-    }
+  if (!digitsOnly || !/^\d+$/.test(digitsOnly)) {
+    return { raw: rawPhone, normalized: '', isValid: false, hasCountryCode: false, warning: 'Contains invalid non-numeric characters' }
   }
 
-  // Length validation for E.164 compliant numbers (typically 7 to 15 digits)
-  if (digitsOnly.length < 7 || digitsOnly.length > 15) {
-    return {
-      raw: rawPhone,
-      normalized: digitsOnly,
-      isValid: false,
-      hasCountryCode: digitsOnly.length >= 11,
-      warning: 'Phone number length is invalid (must be 7-15 digits)',
-    }
+  if (digitsOnly.length < 8 || digitsOnly.length > 15) {
+    return { raw: rawPhone, normalized: digitsOnly, isValid: false, hasCountryCode: digitsOnly.length > 10, warning: 'Phone number length should be between 8 and 15 digits' }
   }
 
-  // Check if country code appears to be included (10+ digits without leading zero)
-  const hasCountryCode = digitsOnly.length >= 10 && !digitsOnly.startsWith('0')
+  const hasCountryCode = digitsOnly.length >= 11
+  const warning = !hasCountryCode ? 'Missing country code. WhatsApp requires international format.' : undefined
 
   return {
     raw: rawPhone,
     normalized: digitsOnly,
     isValid: true,
     hasCountryCode,
-    warning: !hasCountryCode ? 'Country code might be missing (e.g. +1 or +44)' : undefined,
+    warning,
   }
 }
 
 /**
- * Generates a wa.me link with prefilled text
+ * Formats a raw phone number cleanly with a leading +
  */
-export function generateWhatsAppUrl(phone: string, text?: string): string {
+export function formatPhoneNumber(rawPhone: string | null | undefined): string {
+  if (!rawPhone) return 'N/A'
+  const p = normalizePhoneNumber(rawPhone)
+  if (!p.normalized) return rawPhone
+  return `+${p.normalized}`
+}
+
+/**
+ * Generates official wa.me deep links for native WhatsApp app / browser launching
+ */
+export function generateWhatsAppUrl(phone: string, textMessage?: string): string {
   const parsed = normalizePhoneNumber(phone)
-  if (!parsed.isValid) return '#'
+  if (!parsed.isValid || !parsed.normalized) {
+    return ''
+  }
 
   const baseUrl = `https://wa.me/${parsed.normalized}`
-  const finalUrl = text && text.trim() ? `${baseUrl}?text=${encodeURIComponent(text.trim())}` : baseUrl
-
-  if (import.meta.env.DEV) {
-    const isStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches
-    console.log('[WhatsApp URL Generated]', {
-      rawPhone: phone,
-      normalizedPhone: parsed.normalized,
-      finalUrl,
-      displayMode: isStandalone ? 'standalone (PWA)' : 'browser',
-    })
+  if (textMessage && textMessage.trim()) {
+    return `${baseUrl}?text=${encodeURIComponent(textMessage.trim())}`
   }
 
-  return finalUrl
+  return baseUrl
 }
 
 /**
- * Replaces template variables in WhatsApp message templates
- * Variables supported: {{lead_name}}, {{agent_name}}, {{workspace_name}}, {{property_requirement}}, {{next_follow_up_date}}
+ * Renders WhatsApp message template variables safely
  */
-export function renderTemplateVariables(template: string, ctx: TemplateVariablesContext): string {
-  if (!template) return ''
-
-  return template
-    .replace(/\{\{\s*lead_name\s*\}\}/gi, ctx.leadName || 'Valued Client')
-    .replace(/\{\{\s*agent_name\s*\}\}/gi, ctx.agentName || 'Your Representative')
-    .replace(/\{\{\s*workspace_name\s*\}\}/gi, ctx.workspaceName || 'Our Team')
-    .replace(/\{\{\s*property_requirement\s*\}\}/gi, ctx.propertyRequirement || 'your requested property')
-    .replace(/\{\{\s*next_follow_up_date\s*\}\}/gi, ctx.nextFollowUpDate || 'soon')
+export function renderTemplateVariables(templateText: string, ctx: TemplateVariablesContext): string {
+  if (!templateText) return ''
+  return templateText
+    .replace(/\{\{\s*lead_name\s*\}\}/gi, ctx.leadName || 'Customer')
+    .replace(/\{\{\s*agent_name\s*\}\}/gi, ctx.agentName || 'Our Team')
+    .replace(/\{\{\s*workspace_name\s*\}\}/gi, ctx.workspaceName || 'Noverlyn')
+    .replace(/\{\{\s*property_requirement\s*\}\}/gi, ctx.propertyRequirement || 'your inquiry')
+    .replace(/\{\{\s*next_followup_date\s*\}\}/gi, ctx.nextFollowUpDate || 'soon')
 }

@@ -35,6 +35,8 @@ import { LeadFormsPage } from '../pages/forms/LeadFormsPage'
 import { ReviewInboxPage } from '../pages/forms/ReviewInboxPage'
 import { ArchivedLeadsPage } from '../pages/leads/ArchivedLeadsPage'
 import { LeadTrashPage } from '../pages/leads/LeadTrashPage'
+import { WhatsAppInboxPage } from '../pages/whatsapp/WhatsAppInboxPage'
+import { ContactReviewPage } from '../pages/whatsapp/ContactReviewPage'
 
 // Guard for initial first-time onboarding (/onboarding)
 const OnboardingRoute: React.FC = () => {
@@ -62,7 +64,7 @@ const CreateWorkspaceRoute: React.FC = () => {
   const { loading: wsLoading } = useWorkspace()
 
   if (authLoading || wsLoading) {
-    return <AppLoadingScreen message="Setting up workspace..." />
+    return <AppLoadingScreen message="Loading workspace..." />
   }
 
   if (!user) {
@@ -118,6 +120,8 @@ export const AppRouter: React.FC = () => {
           <Route path="/leads/import" element={<CsvImportPage />} />
           <Route path="/leads/:leadId" element={<LeadDetailPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
+          <Route path="/whatsapp/inbox" element={<WhatsAppInboxPage />} />
+          <Route path="/whatsapp/review" element={<ContactReviewPage />} />
           <Route path="/lead-forms" element={<LeadFormsPage />} />
           <Route path="/lead-forms/review" element={<ReviewInboxPage />} />
           <Route path="/team" element={<TeamPage />} />

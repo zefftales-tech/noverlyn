@@ -2,7 +2,8 @@
 // SUPABASE EDGE FUNCTION: whatsapp-webhook
 // Handles public Meta WhatsApp Cloud API webhooks:
 // - GET: Challenge token verification (returns 200 plain text challenge or 403)
-// - POST: Ingesting events with HMAC-SHA256 signature verification (x-hub-signature-256) & idempotency
+// - POST: Ingesting events with HMAC-SHA256 signature verification (x-hub-signature-256),
+//         idempotency, error handling, status tracking, and triggering database RPC inbox processing.
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -18,7 +19,6 @@ serve(async (req) => {
     const challenge = url.searchParams.get('hub.challenge')
     const expectedToken = Deno.env.get('WHATSAPP_WEBHOOK_VERIFY_TOKEN')?.trim()
 
-    // Safe diagnostic logging (never log secret values)
     console.log('[WhatsApp Webhook GET Verification Request]', {
       method: req.method,
       mode,
@@ -50,7 +50,7 @@ serve(async (req) => {
     })
   }
 
-  // 2. POST WEBHOOK EVENT INGESTION
+  // 2. POST WEBHOOK EVENT INGESTION & PROCESSING
   if (req.method === 'POST') {
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
@@ -107,7 +107,7 @@ serve(async (req) => {
       // Extract entries & phone number ID
       const entries = (payload.entry || []) as Array<Record<string, unknown>>
       if (entries.length === 0) {
-        return new Response(JSON.stringify({ status: 'ignored', reason: 'No entries' }), {
+        return new Response(JSON.stringify({ status: 'received', reason: 'no_entries' }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -133,14 +133,14 @@ serve(async (req) => {
           const workspaceId = connection?.workspace_id || null
           const connectionId = connection?.id || null
 
-          // Extract message or status event ID for idempotency
+          const contacts = (value.contacts || []) as Array<Record<string, unknown>>
           const messages = (value.messages || []) as Array<Record<string, unknown>>
           const statuses = (value.statuses || []) as Array<Record<string, unknown>>
           const providerEventId = (messages[0]?.id || statuses[0]?.id || `event_${Date.now()}`) as string
           const eventType = messages.length > 0 ? 'inbound_message' : statuses.length > 0 ? 'status_update' : 'change_event'
 
-          // Store event in database with idempotency (ignore duplicates)
-          const { error: insertErr } = await supabaseAdmin
+          // Store event in database with initial status
+          const { data: eventRecord, error: insertErr } = await supabaseAdmin
             .from('whatsapp_webhook_events')
             .insert({
               workspace_id: workspaceId,
@@ -152,8 +152,10 @@ serve(async (req) => {
               processing_error: connectionId ? null : 'Unknown phone_number_id',
               received_at: new Date().toISOString(),
             })
+            .select('id')
+            .single()
 
-          if (!insertErr && connectionId) {
+          if (!insertErr && connectionId && workspaceId && eventRecord?.id) {
             // Update last_webhook_at timestamp on connection
             await supabaseAdmin
               .from('whatsapp_connections')
@@ -162,11 +164,103 @@ serve(async (req) => {
                 updated_at: new Date().toISOString(),
               })
               .eq('id', connectionId)
+
+            let processingFailed = false
+            let lastErrorMessage: string | null = null
+
+            // A. PROCESS INBOUND MESSAGES
+            for (const msg of messages) {
+              try {
+                const fromPhone = (msg.from || '') as string
+                const msgId = (msg.id || '') as string
+                const msgType = (msg.type || 'text') as string
+                const textObj = (msg.text || {}) as Record<string, unknown>
+                const textBody = (textObj.body || null) as string | null
+                const imageObj = (msg.image || {}) as Record<string, unknown>
+                const docObj = (msg.document || {}) as Record<string, unknown>
+                const audioObj = (msg.audio || {}) as Record<string, unknown>
+                const videoObj = (msg.video || {}) as Record<string, unknown>
+
+                const mediaId = (imageObj.id || docObj.id || audioObj.id || videoObj.id || null) as string | null
+                const mediaMime = (imageObj.mime_type || docObj.mime_type || audioObj.mime_type || videoObj.mime_type || null) as string | null
+                const mediaFilename = (docObj.filename || null) as string | null
+                const mediaCaption = (imageObj.caption || docObj.caption || videoObj.caption || null) as string | null
+
+                const senderName = (contacts[0]?.profile as Record<string, unknown> | undefined)?.name as string | undefined || fromPhone
+
+                const tsNum = Number(msg.timestamp) || Math.floor(Date.now() / 1000)
+                const occurredAt = new Date(tsNum * 1000).toISOString()
+
+                const { error: rpcErr } = await supabaseAdmin.rpc('process_inbound_whatsapp_message_rpc', {
+                  p_workspace_id: workspaceId,
+                  p_connection_id: connectionId,
+                  p_sender_phone: fromPhone,
+                  p_sender_name: senderName,
+                  p_meta_message_id: msgId,
+                  p_message_type: msgType,
+                  p_text_body: textBody,
+                  p_media_id: mediaId,
+                  p_media_mime: mediaMime,
+                  p_media_filename: mediaFilename,
+                  p_media_caption: mediaCaption,
+                  p_timestamp: occurredAt,
+                  p_raw_metadata: msg,
+                })
+
+                if (rpcErr) {
+                  processingFailed = true
+                  lastErrorMessage = rpcErr.message
+                }
+              } catch (mErr: unknown) {
+                processingFailed = true
+                lastErrorMessage = mErr instanceof Error ? mErr.message : 'Unknown inbound error'
+              }
+            }
+
+            // B. PROCESS MESSAGE STATUS UPDATES
+            for (const st of statuses) {
+              try {
+                const statusMsgId = (st.id || '') as string
+                const statusType = (st.status || 'sent') as string
+                const tsNum = Number(st.timestamp) || Math.floor(Date.now() / 1000)
+                const statusAt = new Date(tsNum * 1000).toISOString()
+                const errors = (st.errors || []) as Array<Record<string, unknown>>
+                const errCode = errors[0]?.code ? String(errors[0]?.code) : null
+                const errTitle = errors[0]?.title ? String(errors[0]?.title) : null
+
+                const { error: rpcErr } = await supabaseAdmin.rpc('process_whatsapp_status_update_rpc', {
+                  p_workspace_id: workspaceId,
+                  p_meta_message_id: statusMsgId,
+                  p_status: statusType,
+                  p_timestamp: statusAt,
+                  p_error_code: errCode,
+                  p_error_message: errTitle,
+                })
+
+                if (rpcErr) {
+                  processingFailed = true
+                  lastErrorMessage = rpcErr.message
+                }
+              } catch (stErr: unknown) {
+                processingFailed = true
+                lastErrorMessage = stErr instanceof Error ? stErr.message : 'Unknown status error'
+              }
+            }
+
+            // Update event final processing status
+            await supabaseAdmin
+              .from('whatsapp_webhook_events')
+              .update({
+                processing_status: processingFailed ? 'failed' : 'processed',
+                processed_at: new Date().toISOString(),
+                processing_error: lastErrorMessage,
+              })
+              .eq('id', eventRecord.id)
           }
         }
       }
 
-      // Fast ACK to Meta (Must return 200 within 3 seconds)
+      // Fast ACK to Meta (Always return HTTP 200 to valid Meta webhooks)
       return new Response(JSON.stringify({ status: 'received' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
