@@ -3,14 +3,21 @@ import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { useWorkspace } from '../../hooks/useWorkspace'
-import { whatsappCloudApi } from '../../lib/whatsappCloudApi'
+import { whatsappCloudApi, type WhatsAppApiError } from '../../lib/whatsappCloudApi'
 import { normalizePhoneNumber } from '../../lib/whatsapp'
-import { Send, AlertCircle, CheckCircle2, Phone, Code } from 'lucide-react'
+import { Send, AlertCircle, CheckCircle2, Phone, Code, Terminal } from 'lucide-react'
 
 export interface SendTestMessageModalProps {
   isOpen: boolean
   onClose: () => void
   phoneNumberId?: string | null
+}
+
+interface MetaErrorState {
+  message: string
+  code?: number
+  subcode?: number
+  traceId?: string
 }
 
 export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
@@ -25,7 +32,7 @@ export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
   const [languageCode, setLanguageCode] = useState('en_US')
 
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MetaErrorState | null>(null)
   const [result, setResult] = useState<{ messageId: string } | null>(null)
 
   useEffect(() => {
@@ -48,7 +55,7 @@ export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
     if (!currentWorkspace) return
 
     if (!parsedPhone.isValid) {
-      setError(`Invalid phone number: ${recipientPhone}. Please enter a valid number with country code.`)
+      setError({ message: `Invalid phone number: ${recipientPhone}. Please enter a valid number with country code.` })
       return
     }
 
@@ -66,8 +73,15 @@ export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
 
       setResult({ messageId: res.message_id })
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send test message via Meta API'
-      setError(msg)
+      const apiErr = err as WhatsAppApiError
+      const displayMessage = apiErr.meta_user_message || apiErr.meta_message || apiErr.message || 'Failed to send test message via Meta API'
+
+      setError({
+        message: displayMessage,
+        code: apiErr.meta_code,
+        subcode: apiErr.meta_subcode,
+        traceId: apiErr.trace_id,
+      })
     } finally {
       setSubmitting(false)
     }
@@ -112,9 +126,25 @@ export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
     >
       <form id="send-test-whatsapp-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-status-critical flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-status-critical space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold text-navy-900 block">Meta Test Message Rejection</span>
+                <p className="text-status-critical">{error.message}</p>
+              </div>
+            </div>
+
+            {(error.code || error.subcode || error.traceId) && (
+              <div className="p-2 bg-red-100/60 rounded-lg text-[11px] font-mono text-red-900 space-y-0.5">
+                <div className="flex items-center gap-1 font-bold text-[10px] uppercase text-red-800 font-sans">
+                  <Terminal className="w-3 h-3 text-red-700" /> Meta Graph API Diagnostics:
+                </div>
+                {error.code && <div>Meta Error Code: <code>{error.code}</code></div>}
+                {error.subcode && <div>Meta Subcode: <code>{error.subcode}</code></div>}
+                {error.traceId && <div>fbtrace_id: <code>{error.traceId}</code></div>}
+              </div>
+            )}
           </div>
         )}
 
@@ -125,7 +155,7 @@ export const SendTestMessageModal: React.FC<SendTestMessageModalProps> = ({
               <span>Test Message Accepted by Meta Cloud API!</span>
             </div>
             <p className="text-[11px] text-content-secondary font-mono">
-              Message ID: <code>{result.messageId}</code>
+              Message ID: <code>{result.messageId}</code> (Status: Accepted)
             </p>
           </div>
         )}

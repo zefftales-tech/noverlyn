@@ -52,6 +52,15 @@ export interface TestMessageParams {
   language_code?: string
 }
 
+export interface WhatsAppApiError extends Error {
+  meta_status?: number
+  meta_code?: number
+  meta_subcode?: number
+  meta_message?: string
+  meta_user_message?: string
+  trace_id?: string
+}
+
 async function invokeEdgeFunction<T>(action: string, payload: Record<string, unknown>): Promise<T> {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('Supabase is not configured')
@@ -63,7 +72,35 @@ async function invokeEdgeFunction<T>(action: string, payload: Record<string, unk
   })
 
   if (error) {
-    console.warn(`[Edge Function ${action} failed, attempting direct Supabase RPC fallback]`, error)
+    console.warn(`[Edge Function ${action} returned non-2xx status]`, error)
+
+    let serverBody: Record<string, unknown> | null = null
+    const errorWithContext = error as unknown as { context?: Response }
+
+    if (errorWithContext?.context && typeof errorWithContext.context.json === 'function') {
+      try {
+        serverBody = await errorWithContext.context.json()
+      } catch {
+        // Body was not JSON
+      }
+    }
+
+    if (serverBody) {
+      const displayMsg =
+        (serverBody.meta_user_message as string) ||
+        (serverBody.meta_message as string) ||
+        (serverBody.error as string) ||
+        error.message
+
+      const apiErr: WhatsAppApiError = new Error(displayMsg)
+      apiErr.meta_status = serverBody.meta_status as number | undefined
+      apiErr.meta_code = serverBody.meta_code as number | undefined
+      apiErr.meta_subcode = serverBody.meta_subcode as number | undefined
+      apiErr.meta_message = serverBody.meta_message as string | undefined
+      apiErr.meta_user_message = serverBody.meta_user_message as string | undefined
+      apiErr.trace_id = serverBody.trace_id as string | undefined
+      throw apiErr
+    }
 
     // Fallback for direct RPC execution if Edge Functions are not deployed yet
     if (action === 'connect') {

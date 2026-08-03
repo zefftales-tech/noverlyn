@@ -2,6 +2,7 @@
 // SUPABASE EDGE FUNCTION: whatsapp-connection-manage
 // Handles server-side Meta Graph API calls, credentials verification,
 // test message sending, status queries, and disconnection.
+// Logs sanitized Meta error details without exposing access tokens or secrets.
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -24,6 +25,34 @@ interface ManageRequestBody {
   language_code?: string
 }
 
+function logAndSanitizeMetaError(action: string, status: number, metaData: Record<string, unknown>) {
+  const metaErr = (metaData?.error || {}) as Record<string, unknown>
+  const sanitized = {
+    action,
+    status,
+    code: metaErr.code,
+    subcode: metaErr.error_subcode,
+    type: metaErr.type,
+    message: metaErr.message,
+    userTitle: metaErr.error_user_title,
+    userMessage: metaErr.error_user_msg,
+    traceId: metaErr.fbtrace_id,
+  }
+
+  console.error('[WhatsApp Meta API Error]', sanitized)
+
+  return {
+    success: false,
+    error: (metaErr.error_user_msg || metaErr.message || 'Meta rejected the WhatsApp request') as string,
+    meta_status: status,
+    meta_code: metaErr.code || null,
+    meta_subcode: metaErr.error_subcode || null,
+    meta_message: metaErr.message || null,
+    meta_user_message: metaErr.error_user_msg || null,
+    trace_id: metaErr.fbtrace_id || null,
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -37,6 +66,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
 
     if (!authHeader) {
+      console.warn('[WhatsApp Manage] Missing Authorization header')
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -50,6 +80,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
     if (authError || !user) {
+      console.warn('[WhatsApp Manage] Unauthorized user token', authError)
       return new Response(JSON.stringify({ error: 'Unauthorized user token' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -60,6 +91,7 @@ serve(async (req) => {
     const { action, workspace_id } = body
 
     if (!workspace_id) {
+      console.warn('[WhatsApp Manage] Missing workspace_id')
       return new Response(JSON.stringify({ error: 'Missing workspace_id' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -76,11 +108,23 @@ serve(async (req) => {
       .single()
 
     if (!member) {
+      console.warn(`[WhatsApp Manage] Access denied to workspace ${workspace_id} for user ${user.id}`)
       return new Response(JSON.stringify({ error: 'Access denied to this workspace' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    // Log structured request metadata (never log access tokens or secrets)
+    console.log('[WhatsApp Manage Request]', {
+      action,
+      workspace_id,
+      user_id: user.id,
+      role: member.role,
+      phone_number_id: body.phone_number_id || null,
+      graphApiVersion,
+      timestamp: new Date().toISOString(),
+    })
 
     // 1. CONNECT ACTION (Owner Only)
     if (action === 'connect') {
@@ -107,9 +151,9 @@ serve(async (req) => {
       const metaData = await metaRes.json()
 
       if (!metaRes.ok || metaData.error) {
-        const errorMsg = metaData.error?.message || 'Meta API credentials validation failed'
-        return new Response(JSON.stringify({ error: errorMsg, code: metaData.error?.code }), {
-          status: 400,
+        const errorPayload = logAndSanitizeMetaError('connect', metaRes.status, metaData)
+        return new Response(JSON.stringify(errorPayload), {
+          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
@@ -128,12 +172,14 @@ serve(async (req) => {
       })
 
       if (rpcErr) {
+        console.error('[WhatsApp Connect RPC Error]', rpcErr)
         return new Response(JSON.stringify({ error: rpcErr.message }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
+      console.log('[WhatsApp Connection Successfully Saved]', { workspace_id, phone_number_id })
       return new Response(JSON.stringify(rpcRes), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -152,9 +198,28 @@ serve(async (req) => {
         p_workspace_id: workspace_id,
       })
 
-      if (!creds || creds.length === 0) {
-        return new Response(JSON.stringify({ error: 'No active WhatsApp Cloud API connection found' }), {
+      const connectionFound = Boolean(creds && creds.length > 0)
+      const credentialFound = Boolean(creds?.[0]?.access_token)
+      const tokenConfigured = Boolean(creds?.[0]?.access_token?.trim())
+
+      console.log('[WhatsApp Credential Check]', { action, workspace_id, connectionFound, credentialFound, tokenConfigured })
+
+      if (!connectionFound || !credentialFound) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'WhatsApp access credential was not found. Reconnect WhatsApp with a fresh token.',
+        }), {
           status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (!tokenConfigured) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'WhatsApp access token is missing. Reconnect the integration.',
+        }), {
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
@@ -168,14 +233,16 @@ serve(async (req) => {
       const metaData = await metaRes.json()
 
       if (!metaRes.ok || metaData.error) {
+        const errorPayload = logAndSanitizeMetaError('verify', metaRes.status, metaData)
+
         await supabaseAdmin.from('whatsapp_connections').update({
           status: 'action_required',
-          last_error: metaData.error?.message || 'Meta verification failed',
+          last_error: errorPayload.error,
           updated_at: new Date().toISOString(),
         }).eq('workspace_id', workspace_id)
 
-        return new Response(JSON.stringify({ error: metaData.error?.message || 'Verification failed' }), {
-          status: 400,
+        return new Response(JSON.stringify(errorPayload), {
+          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
@@ -223,6 +290,7 @@ serve(async (req) => {
       })
 
       if (rpcErr) {
+        console.error('[WhatsApp Disconnect RPC Error]', rpcErr)
         return new Response(JSON.stringify({ error: rpcErr.message }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -251,19 +319,47 @@ serve(async (req) => {
         })
       }
 
-      const { data: creds } = await supabaseAdmin.rpc('get_whatsapp_connection_credentials_internal', {
+      const { data: creds, error: credErr } = await supabaseAdmin.rpc('get_whatsapp_connection_credentials_internal', {
         p_workspace_id: workspace_id,
       })
 
-      if (!creds || creds.length === 0) {
-        return new Response(JSON.stringify({ error: 'No active WhatsApp Cloud API connection found' }), {
+      const connectionFound = Boolean(creds && creds.length > 0)
+      const credentialFound = Boolean(creds?.[0]?.access_token)
+      const tokenConfigured = Boolean(creds?.[0]?.access_token?.trim())
+      const phoneIdConfigured = Boolean(creds?.[0]?.phone_number_id?.trim())
+
+      console.log('[WhatsApp Test Message Credential Check]', {
+        action,
+        workspace_id,
+        connectionFound,
+        credentialFound,
+        tokenConfigured,
+        phoneIdConfigured,
+        rpcError: credErr ? credErr.message : null,
+      })
+
+      if (!connectionFound || !credentialFound) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'WhatsApp access credential was not found. Reconnect WhatsApp with a fresh token.',
+        }), {
           status: 404,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
+      if (!tokenConfigured) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'WhatsApp access token is missing. Reconnect the integration.',
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       const { phone_number_id, access_token } = creds[0]
-      const cleanPhone = recipient_phone.replace(/[\s()+\-.]/g, '')
+      const cleanPhone = recipient_phone.replace(/\D/g, '')
 
       const payload = {
         messaging_product: 'whatsapp',
@@ -274,6 +370,14 @@ serve(async (req) => {
           language: { code: language_code || 'en_US' },
         },
       }
+
+      console.log('[WhatsApp Test Message Sending]', {
+        graphApiVersion,
+        phone_number_id,
+        cleanPhoneLength: cleanPhone.length,
+        templateName: payload.template.name,
+        languageCode: payload.template.language.code,
+      })
 
       const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${phone_number_id}/messages`, {
         method: 'POST',
@@ -287,15 +391,23 @@ serve(async (req) => {
       const metaData = await metaRes.json()
 
       if (!metaRes.ok || metaData.error) {
-        return new Response(JSON.stringify({ error: metaData.error?.message || 'Meta test message sending failed' }), {
-          status: 400,
+        const errorPayload = logAndSanitizeMetaError('test-message', metaRes.status, metaData)
+        return new Response(JSON.stringify(errorPayload), {
+          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
       const messageId = metaData.messages?.[0]?.id || 'unknown_msg_id'
 
-      return new Response(JSON.stringify({ success: true, message_id: messageId, delivery_status: 'accepted', meta_response: metaData }), {
+      console.log('[WhatsApp Test Message Success]', { messageId, phone_number_id })
+
+      return new Response(JSON.stringify({
+        success: true,
+        message_id: messageId,
+        delivery_status: 'accepted',
+        meta_response: metaData
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -306,6 +418,7 @@ serve(async (req) => {
     })
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Internal Edge Function error'
+    console.error('[WhatsApp Connection Manage Critical Error]', err)
     return new Response(JSON.stringify({ error: errorMsg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
