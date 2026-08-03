@@ -1,2 +1,8 @@
 [functions.notification-digest-dispatch]
 verify_jwt = false
+
+[functions.whatsapp-connection-manage]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
