@@ -73,7 +73,7 @@ async function invokeEdgeFunction<T>(action: string, payload: Record<string, unk
         p_phone_number_id: payload.phone_number_id,
         p_access_token: payload.access_token,
         p_meta_business_id: payload.meta_business_id || null,
-        p_display_phone: payload.phone_number_id,
+        p_display_phone: null,
         p_verified_name: 'Verified Business',
       })
       if (rpcRes.error) throw new Error(rpcRes.error.message)

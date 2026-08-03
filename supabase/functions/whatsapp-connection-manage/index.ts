@@ -121,7 +121,7 @@ serve(async (req) => {
         p_phone_number_id: phone_number_id,
         p_access_token: access_token,
         p_meta_business_id: meta_business_id || null,
-        p_display_phone: metaData.display_phone_number || phone_number_id,
+        p_display_phone: metaData.display_phone_number || null,
         p_verified_name: metaData.verified_name || 'Verified Business',
         p_quality_rating: metaData.quality_rating || 'UNKNOWN',
         p_limit_tier: metaData.messaging_limit_tier || 'TIER_50',
@@ -182,7 +182,7 @@ serve(async (req) => {
 
       await supabaseAdmin.from('whatsapp_connections').update({
         status: 'connected',
-        display_phone_number: metaData.display_phone_number || phone_number_id,
+        display_phone_number: metaData.display_phone_number || null,
         verified_name: metaData.verified_name || 'Verified Business',
         quality_rating: metaData.quality_rating || 'GREEN',
         messaging_limit_tier: metaData.messaging_limit_tier || 'TIER_50',

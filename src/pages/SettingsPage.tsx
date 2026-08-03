@@ -406,8 +406,10 @@ export const SettingsPage: React.FC = () => {
                           CONNECTED VIA CLOUD API
                         </Badge>
                       </div>
-                      <p className="text-xs text-content-secondary mt-0.5">
-                        Display Phone: <strong className="text-navy-900">{waConn?.display_phone_number || waConn?.phone_number_id}</strong> • WABA ID: <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border">{waConn?.whatsapp_business_account_id}</code>
+                      <p className="text-xs text-content-secondary mt-0.5 space-x-2">
+                        <span>Display Phone: <strong className="text-navy-900">{waConn?.display_phone_number || 'Display phone number unavailable'}</strong></span>
+                        <span>• Phone Number ID: <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border">{waConn?.phone_number_id || 'N/A'}</code></span>
+                        <span>• WABA ID: <code className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border">{waConn?.whatsapp_business_account_id || 'N/A'}</code></span>
                       </p>
                     </div>
                   </div>
@@ -652,7 +654,7 @@ export const SettingsPage: React.FC = () => {
       <SendTestMessageModal
         isOpen={isTestMsgOpen}
         onClose={() => setIsTestMsgOpen(false)}
-        phoneNumberId={waConn?.display_phone_number || waConn?.phone_number_id}
+        phoneNumberId={waConn?.phone_number_id}
       />
     </div>
   )
