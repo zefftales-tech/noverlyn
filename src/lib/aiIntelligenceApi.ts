@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase'
+import { supabase, isSupabaseConfigured, getValidAccessToken } from './supabase'
 
 export interface WorkspaceAiContext {
   id: string
@@ -141,8 +141,18 @@ export const aiIntelligenceApi = {
   }): Promise<{ analysis: AiConversationAnalysis; suggestions: AiLeadSuggestion[]; cached: boolean }> => {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured')
 
+    let token: string
+    try {
+      token = await getValidAccessToken()
+    } catch {
+      throw new Error('Your session has expired. Please sign in again.')
+    }
+
     const { data, error } = await supabase.functions.invoke('ai-conversation-analyze', {
       body: params,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     })
 
     if (error) {

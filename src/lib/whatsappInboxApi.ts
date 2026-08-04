@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase'
+import { supabase, isSupabaseConfigured, getValidAccessToken } from './supabase'
 import type { WhatsAppApiError } from './whatsappCloudApi'
 
 export interface WhatsAppConversation {
@@ -260,10 +260,20 @@ export const whatsappInboxApi = {
   }): Promise<{ success: boolean; message_id: string }> => {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured')
 
+    let token: string
+    try {
+      token = await getValidAccessToken()
+    } catch {
+      throw new Error('Your session has expired. Please sign in again.')
+    }
+
     const { data, error } = await supabase.functions.invoke('whatsapp-connection-manage', {
       body: {
         action: 'send-reply',
         ...params,
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
       },
     })
 

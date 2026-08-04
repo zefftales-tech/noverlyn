@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase'
+import { supabase, isSupabaseConfigured, getValidAccessToken } from './supabase'
 
 export interface WhatsAppConnection {
   id: string
@@ -66,9 +66,28 @@ async function invokeEdgeFunction<T>(action: string, payload: Record<string, unk
     throw new Error('Supabase is not configured')
   }
 
-  // Attempt to invoke Edge Function
+  let token: string
+  try {
+    token = await getValidAccessToken()
+  } catch {
+    const err: WhatsAppApiError = new Error('Your session has expired. Please sign in again.')
+    err.meta_user_message = 'Your session has expired. Please sign in again.'
+    throw err
+  }
+
+  if (import.meta.env.DEV) {
+    console.log('[whatsappCloudApi] Invoking whatsapp-connection-manage', {
+      action,
+      hasToken: Boolean(token),
+    })
+  }
+
+  // Invoke Edge Function with explicit Bearer access token
   const { data, error } = await supabase.functions.invoke('whatsapp-connection-manage', {
     body: { action, ...payload },
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 
   if (error) {
@@ -87,9 +106,10 @@ async function invokeEdgeFunction<T>(action: string, payload: Record<string, unk
 
     if (serverBody) {
       const displayMsg =
+        (serverBody.message as string) ||
+        (serverBody.error as string) ||
         (serverBody.meta_user_message as string) ||
         (serverBody.meta_message as string) ||
-        (serverBody.error as string) ||
         error.message
 
       const apiErr: WhatsAppApiError = new Error(displayMsg)
@@ -97,7 +117,7 @@ async function invokeEdgeFunction<T>(action: string, payload: Record<string, unk
       apiErr.meta_code = serverBody.meta_code as number | undefined
       apiErr.meta_subcode = serverBody.meta_subcode as number | undefined
       apiErr.meta_message = serverBody.meta_message as string | undefined
-      apiErr.meta_user_message = serverBody.meta_user_message as string | undefined
+      apiErr.meta_user_message = (serverBody.meta_user_message || displayMsg) as string
       apiErr.trace_id = serverBody.trace_id as string | undefined
       throw apiErr
     }
