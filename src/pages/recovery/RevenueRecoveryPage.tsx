@@ -126,23 +126,42 @@ export const RevenueRecoveryPage: React.FC = () => {
     }
   }
 
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set())
+
   const handleSendReply = async (item: RevenueRecoveryItem) => {
     if (!currentWorkspace || !item.conversation_id || !item.suggested_message) return
+    if (sendingIds.has(item.id)) return
+
+    setSendingIds((prev) => new Set(prev).add(item.id))
     setActionLoadingId(item.id)
     try {
+      if (import.meta.env.DEV) {
+        console.log('[Recovery Send Reply]', {
+          recovery_item_id: item.id,
+          conversation_id: item.conversation_id,
+          workspace_id: currentWorkspace.id,
+          has_suggested_message: true,
+        })
+      }
+
       await whatsappInboxApi.sendReplyMessage({
         workspace_id: currentWorkspace.id,
         conversation_id: item.conversation_id,
         text_body: item.suggested_message,
       })
-      await revenueRecoveryApi.completeItem(item.id, 'Sent suggested WhatsApp follow-up reply')
+      await revenueRecoveryApi.completeItem(item.id, 'Reply sent from Revenue Recovery')
       await loadData()
-      alert('Follow-up reply sent successfully via WhatsApp!')
+      alert('Reply sent successfully via WhatsApp!')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send reply'
       alert(`Error sending reply: ${msg}`)
     } finally {
       setActionLoadingId(null)
+      setSendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
     }
   }
 
@@ -462,6 +481,13 @@ export const RevenueRecoveryPage: React.FC = () => {
           </div>
         )}
 
+        {/* Unlinked WhatsApp Conversation Warning */}
+        {!item.conversation_id && (
+          <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 font-medium">
+            WhatsApp conversation is not linked to this lead. Open the lead and connect or link its WhatsApp conversation first.
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-surface-border/60">
           <div className="flex items-center gap-2">
@@ -469,7 +495,7 @@ export const RevenueRecoveryPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/whatsapp/inbox?conversation_id=${item.conversation_id}`)}
+                onClick={() => navigate(`/whatsapp/inbox?conversation=${item.conversation_id}`)}
                 icon={<MessageSquare className="w-3.5 h-3.5 text-brand-blue" />}
               >
                 Open Inbox
@@ -481,7 +507,8 @@ export const RevenueRecoveryPage: React.FC = () => {
                 variant="primary"
                 size="sm"
                 onClick={() => handleSendReply(item)}
-                isLoading={isLoading}
+                isLoading={isLoading || sendingIds.has(item.id)}
+                disabled={!item.conversation_id || sendingIds.has(item.id)}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Send After Review

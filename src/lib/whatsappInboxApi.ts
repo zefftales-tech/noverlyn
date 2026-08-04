@@ -305,6 +305,7 @@ export const whatsappInboxApi = {
 
       if (serverBody) {
         const displayMsg =
+          (serverBody.message as string) ||
           (serverBody.meta_user_message as string) ||
           (serverBody.meta_message as string) ||
           (serverBody.error as string) ||

@@ -526,7 +526,7 @@ serve(async (req) => {
       )
     }
 
-    // 6. SEND REPLY ACTION (All active members)
+    // 6. SEND REPLY ACTION (Owner, Manager, or Assigned Agent)
     if (action === 'send-reply') {
       const { conversation_id, text_body } = body
       if (!conversation_id || !text_body?.trim()) {
@@ -545,7 +545,7 @@ serve(async (req) => {
 
       const { data: conv } = await supabaseAdmin
         .from('whatsapp_conversations')
-        .select('contact_phone')
+        .select('id, contact_phone, assigned_to, connection_id')
         .eq('id', conversation_id)
         .eq('workspace_id', workspace_id)
         .single()
@@ -555,10 +555,25 @@ serve(async (req) => {
           JSON.stringify({
             success: false,
             error: 'CONVERSATION_NOT_FOUND',
-            message: 'WhatsApp conversation not found.',
+            message: 'WhatsApp conversation not found in this workspace.',
           }),
           {
             status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      // Role check for Agents: allow if unassigned or assigned to current agent
+      if (member.role === 'agent' && conv.assigned_to && conv.assigned_to !== user.id) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CONVERSATION_ACCESS_DENIED',
+            message: 'You do not have permission to access this conversation.',
+          }),
+          {
+            status: 403,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         )
@@ -572,11 +587,11 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'CREDENTIALS_NOT_FOUND',
-            message: 'WhatsApp connection credentials not configured.',
+            error: 'WHATSAPP_NOT_CONNECTED',
+            message: 'WhatsApp business account is not connected for this workspace.',
           }),
           {
-            status: 404,
+            status: 409,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         )
@@ -584,6 +599,16 @@ serve(async (req) => {
 
       const activeToken = creds[0].access_token
       const activePhoneId = creds[0].phone_number_id
+
+      console.log('[WhatsApp Connect Step] send-reply_initiated', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        conversation_id,
+        auth_verified: true,
+        access_verified: true,
+        connection_found: true,
+      })
 
       const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${activePhoneId}/messages`, {
         method: 'POST',
@@ -614,12 +639,14 @@ serve(async (req) => {
 
       await supabaseAdmin.from('whatsapp_messages').insert({
         workspace_id,
+        connection_id: conv.connection_id || creds[0].connection_id,
         conversation_id,
         meta_message_id: wamid,
         direction: 'outgoing',
         message_type: 'text',
         text_body: text_body.trim(),
         status: 'sent',
+        sent_by: user.id,
         occurred_at: new Date().toISOString(),
       })
 
@@ -627,8 +654,10 @@ serve(async (req) => {
         .from('whatsapp_conversations')
         .update({
           last_message_preview: text_body.trim().slice(0, 100),
-          last_message_direction: 'outgoing',
+          last_outgoing_at: new Date().toISOString(),
           last_message_at: new Date().toISOString(),
+          needs_response: false,
+          status: 'waiting',
           updated_at: new Date().toISOString(),
         })
         .eq('id', conversation_id)

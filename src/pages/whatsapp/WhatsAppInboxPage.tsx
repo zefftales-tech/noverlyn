@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -29,13 +29,16 @@ import { AiIntelligencePanel } from '../../components/whatsapp/AiIntelligencePan
 export const WhatsAppInboxPage: React.FC = () => {
   const { currentWorkspace } = useWorkspace()
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
+
+  const targetConvId = searchParams.get('conversation') || searchParams.get('conversation_id')
 
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([])
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(targetConvId)
   const [messages, setMessages] = useState<WhatsAppMessage[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMemberItem[]>([])
 
-  const [filterStatus, setFilterStatus] = useState<'all' | 'needs_response' | 'unread' | 'assigned_to_me' | 'unassigned' | 'open' | 'resolved'>('needs_response')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'needs_response' | 'unread' | 'assigned_to_me' | 'unassigned' | 'open' | 'resolved'>(targetConvId ? 'all' : 'needs_response')
   const [searchQuery, setSearchQuery] = useState('')
 
   const [loadingConvs, setLoadingConvs] = useState(true)
