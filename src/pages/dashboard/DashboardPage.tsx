@@ -13,6 +13,7 @@ import {
   getUrgencyBadgeVariant
 } from '../../lib/attentionEngine'
 import { getTemplateForBusinessType } from '../../lib/templates'
+import { revenueRecoveryApi } from '../../lib/revenueRecoveryApi'
 import type { Database } from '../../types/database.types'
 
 import {
@@ -49,6 +50,8 @@ export const DashboardPage: React.FC = () => {
   const [pipelineTotalValue, setPipelineTotalValue] = useState<number>(0)
   const [wonCount, setWonCount] = useState<number>(0)
   const [wonTotalValue, setWonTotalValue] = useState<number>(0)
+  const [recoveryItemsCount, setRecoveryItemsCount] = useState<number>(0)
+  const [recoveryTotalValue, setRecoveryTotalValue] = useState<number>(0)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date())
 
   const activeTemplate = getTemplateForBusinessType((currentWorkspace as unknown as { business_type?: string })?.business_type)
@@ -58,9 +61,13 @@ export const DashboardPage: React.FC = () => {
     setLoading(true)
 
     try {
-      // 1. Fetch Attention Items
+      // 1. Fetch Attention Items & Recovery Items
       const items = await fetchWorkspaceAttentionItems(currentWorkspace.id)
       setAttentionItems(items)
+
+      const recItems = await revenueRecoveryApi.getRecoveryItems(currentWorkspace.id)
+      setRecoveryItemsCount(recItems.length)
+      setRecoveryTotalValue(recItems.reduce((acc, item) => acc + (item.estimated_value || 0), 0))
 
       // 2. Fetch Pending Form Submissions Count
       const { count: pCount } = await supabase
@@ -263,6 +270,24 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div
+              onClick={() => navigate('/recovery')}
+              className="p-3 rounded-xl bg-gradient-to-br from-indigo-900 to-slate-900 border border-indigo-400/50 hover:border-indigo-300 cursor-pointer transition-all shadow-md"
+            >
+              <div className="text-[11px] text-indigo-300 font-semibold uppercase tracking-wider flex items-center justify-between">
+                <span>Revenue at Risk</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 font-bold">
+                  {recoveryItemsCount} Risks
+                </span>
+              </div>
+              <div className="text-xl font-bold text-white mt-1">
+                {recoveryTotalValue > 0 ? `$${recoveryTotalValue.toLocaleString()}` : `${recoveryItemsCount} Open Items`}
+              </div>
+              <p className="text-[11px] text-indigo-200/80 mt-1">
+                Detected follow-up risks & missed customer opportunities
+              </p>
+            </div>
+
             <div
               onClick={() => navigate('/whatsapp/inbox')}
               className="p-3 rounded-xl bg-indigo-950/60 border border-indigo-500/30 hover:border-indigo-400 cursor-pointer transition-all"

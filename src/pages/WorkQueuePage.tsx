@@ -222,6 +222,7 @@ export const WorkQueuePage: React.FC = () => {
       <div className="bg-surface-card p-1.5 rounded-xl border border-surface-border flex gap-1.5 overflow-x-auto text-xs font-semibold select-none no-scrollbar shadow-2xs">
         {[
           { key: 'all', label: `ALL (${attentionItems.length})` },
+          { key: 'revenue_recovery', label: '🔥 RECOVERY & LOST REVENUE' },
           { key: 'ai_reply', label: '✨ AI: REPLY NOW' },
           { key: 'ai_qualification', label: '✨ AI: QUALIFICATION NEEDED' },
           { key: 'ai_review', label: '✨ AI: SUGGESTIONS AWAITING REVIEW' },
