@@ -21,8 +21,10 @@ import {
   AlertCircle,
   Check,
   CheckCheck,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from 'lucide-react'
+import { AiIntelligencePanel } from '../../components/whatsapp/AiIntelligencePanel'
 
 export const WhatsAppInboxPage: React.FC = () => {
   const { currentWorkspace } = useWorkspace()
@@ -41,6 +43,22 @@ export const WhatsAppInboxPage: React.FC = () => {
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [showAiPanel, setShowAiPanel] = useState(true)
+
+  const handleInsertSuggestedReply = (text: string) => {
+    setReplyText(text)
+  }
+
+  const handleEvidenceClick = (msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2')
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2')
+      }, 3000)
+    }
+  }
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -393,6 +411,16 @@ export const WhatsAppInboxPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant={showAiPanel ? 'primary' : 'outline'}
+                    size="sm"
+                    icon={<Sparkles className="w-3.5 h-3.5" />}
+                    onClick={() => setShowAiPanel(!showAiPanel)}
+                    className={showAiPanel ? 'bg-indigo-600 text-white' : ''}
+                  >
+                    AI Intelligence
+                  </Button>
+
                   <Select
                     options={[
                       { value: '', label: 'Unassigned' },
@@ -414,6 +442,10 @@ export const WhatsAppInboxPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Chat Thread + AI Intelligence Panel Container */}
+              <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col min-w-0">
 
               {/* Messages Thread Container */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
@@ -495,6 +527,23 @@ export const WhatsAppInboxPage: React.FC = () => {
                   Send
                 </Button>
               </form>
+                </div>
+
+                {/* AI Intelligence Panel Right Column */}
+                {showAiPanel && currentWorkspace && (
+                  <div className="w-80 sm:w-96 shrink-0 h-full border-l border-surface-border">
+                    <AiIntelligencePanel
+                      workspaceId={currentWorkspace.id}
+                      conversationId={selectedConv.id}
+                      contactPhone={selectedConv.contact_phone}
+                      contactName={selectedConv.contact_name}
+                      onInsertReply={handleInsertSuggestedReply}
+                      onEvidenceClick={handleEvidenceClick}
+                      onCloseMobileDrawer={() => setShowAiPanel(false)}
+                    />
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-content-muted space-y-3">

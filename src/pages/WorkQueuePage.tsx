@@ -222,6 +222,9 @@ export const WorkQueuePage: React.FC = () => {
       <div className="bg-surface-card p-1.5 rounded-xl border border-surface-border flex gap-1.5 overflow-x-auto text-xs font-semibold select-none no-scrollbar shadow-2xs">
         {[
           { key: 'all', label: `ALL (${attentionItems.length})` },
+          { key: 'ai_reply', label: '✨ AI: REPLY NOW' },
+          { key: 'ai_qualification', label: '✨ AI: QUALIFICATION NEEDED' },
+          { key: 'ai_review', label: '✨ AI: SUGGESTIONS AWAITING REVIEW' },
           { key: 'overdue', label: `OVERDUE (${attentionItems.filter((i) => i.primary_issue === 'overdue_follow_up').length})` },
           { key: 'due_today', label: `DUE TODAY (${attentionItems.filter((i) => i.primary_issue === 'due_today').length})` },
           { key: 'at_risk', label: `AT RISK (${attentionItems.filter((i) => ['hot_lead_inactive', 'new_lead_waiting', 'negotiation_no_action', 'high_value_at_risk'].includes(i.primary_issue)).length})` },

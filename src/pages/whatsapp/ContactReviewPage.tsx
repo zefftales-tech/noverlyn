@@ -19,8 +19,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Search,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react'
+import { aiIntelligenceApi } from '../../lib/aiIntelligenceApi'
 
 export const ContactReviewPage: React.FC = () => {
   const { currentWorkspace, currentRole } = useWorkspace()
@@ -253,6 +255,36 @@ export const ContactReviewPage: React.FC = () => {
           maxWidth="md"
         >
           <form onSubmit={handleCreateLeadSubmit} className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+              <div className="flex items-center space-x-2 text-indigo-900">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span className="font-bold">AI Intelligence Pre-fill</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                onClick={async () => {
+                  if (!currentWorkspace || !createReview) return
+                  try {
+                    const result = await aiIntelligenceApi.analyzeConversation({
+                      workspace_id: currentWorkspace.id,
+                      conversation_id: createReview.conversation_id,
+                      trigger_type: 'lead_review',
+                    })
+                    if (result.analysis.customer_intent) {
+                      setLeadName(createReview.contact_name || result.analysis.customer_intent.slice(0, 30))
+                    }
+                  } catch {
+                    // fallback
+                  }
+                }}
+              >
+                Auto-fill with AI
+              </Button>
+            </div>
+
             <Input
               label="Lead Name *"
               value={leadName}

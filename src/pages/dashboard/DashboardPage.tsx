@@ -29,7 +29,8 @@ import {
   DollarSign,
   Trophy,
   RefreshCw,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from 'lucide-react'
 import { FirstRunChecklist } from '../../components/dashboard/FirstRunChecklist'
 
@@ -241,6 +242,78 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-brand-blue" />
             <h2 className="font-heading font-bold text-lg text-navy-900">Needs Attention Today</h2>
+          </div>
+        </div>
+
+        {/* AI CONVERSATION INTELLIGENCE CARDS */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900/90 to-slate-900 text-white space-y-3 shadow-lg border border-indigo-700/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-5 h-5 text-indigo-400" />
+              <h3 className="font-bold text-sm">AI Conversation Operations Intelligence</h3>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs border-indigo-500/50 text-indigo-200 hover:bg-indigo-800/50"
+              onClick={() => navigate('/whatsapp/inbox')}
+            >
+              Open AI Team Inbox
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div
+              onClick={() => navigate('/whatsapp/inbox')}
+              className="p-3 rounded-xl bg-indigo-950/60 border border-indigo-500/30 hover:border-indigo-400 cursor-pointer transition-all"
+            >
+              <div className="text-[11px] text-indigo-300 font-semibold uppercase tracking-wider">
+                High-Intent Leads
+              </div>
+              <div className="text-xl font-bold text-white mt-1">High Intent Detected</div>
+              <p className="text-[11px] text-indigo-200/80 mt-1">
+                Leads with score 75+ awaiting immediate agent reply
+              </p>
+            </div>
+
+            <div
+              onClick={() => navigate('/whatsapp/inbox')}
+              className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 hover:border-amber-400 cursor-pointer transition-all"
+            >
+              <div className="text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
+                Missing Information
+              </div>
+              <div className="text-xl font-bold text-white mt-1">Qualification Needed</div>
+              <p className="text-[11px] text-amber-200/80 mt-1">
+                Conversations missing budget, timeline, or location
+              </p>
+            </div>
+
+            <div
+              onClick={() => navigate('/whatsapp/inbox')}
+              className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-400 cursor-pointer transition-all"
+            >
+              <div className="text-[11px] text-emerald-300 font-semibold uppercase tracking-wider">
+                Strong Buying Signals
+              </div>
+              <div className="text-xl font-bold text-white mt-1">Ready for Pitch</div>
+              <p className="text-[11px] text-emerald-200/80 mt-1">
+                Buying signals detected in recent WhatsApp messages
+              </p>
+            </div>
+
+            <div
+              onClick={() => navigate('/whatsapp/review')}
+              className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-slate-500 cursor-pointer transition-all"
+            >
+              <div className="text-[11px] text-slate-300 font-semibold uppercase tracking-wider">
+                AI Reviews Pending
+              </div>
+              <div className="text-xl font-bold text-white mt-1">Suggestions Review</div>
+              <p className="text-[11px] text-slate-300/80 mt-1">
+                Contact review & custom field updates ready
+              </p>
+            </div>
           </div>
         </div>
 

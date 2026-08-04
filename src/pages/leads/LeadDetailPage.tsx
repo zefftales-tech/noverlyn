@@ -505,6 +505,7 @@ export const LeadDetailPage: React.FC = () => {
       {/* NAVIGATION TABS */}
       <div className="flex items-center gap-6 border-b border-surface-border text-xs select-none overflow-x-auto pb-1">
         {[
+          { key: 'ai_intelligence', label: 'AI Intelligence ✨' },
           { key: 'whatsapp', label: `WhatsApp (${communications.length})` },
           { key: 'timeline', label: `Activity Timeline (${activities.length})` },
           { key: 'followups', label: `Follow-ups (${followUps.length})` },
