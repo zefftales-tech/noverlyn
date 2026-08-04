@@ -12,15 +12,13 @@ import { leadsApi } from '../../lib/leadsApi'
 import { teamApi, type TeamMemberItem } from '../../lib/teamApi'
 import { formatPhoneNumber } from '../../lib/whatsapp'
 import {
-  UserCheck,
   UserPlus,
   Link2,
   ArrowLeft,
-  AlertCircle,
   CheckCircle2,
-  Search,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  HelpCircle,
 } from 'lucide-react'
 import { aiIntelligenceApi } from '../../lib/aiIntelligenceApi'
 
@@ -34,15 +32,25 @@ export const ContactReviewPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Create Lead Modal
+  // Create Lead Modal State
   const [createReview, setCreateReview] = useState<WhatsAppContactReview | null>(null)
   const [leadName, setLeadName] = useState('')
+  const [requirement, setRequirement] = useState('')
+  const [budgetMin, setBudgetMin] = useState<string>('')
+  const [budgetMax, setBudgetMax] = useState<string>('')
+  const [stage, setStage] = useState('new')
+  const [priority, setPriority] = useState('warm')
   const [assignedAgent, setAssignedAgent] = useState<string>('')
+  const [initialNote, setInitialNote] = useState('')
+  const [customFieldsData, setCustomFieldsData] = useState<Record<string, unknown>>({})
+  const [missingInfoList, setMissingInfoList] = useState<string[]>([])
+  const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const [selectedSugIds, setSelectedSugIds] = useState<string[]>([])
+  const [analyzingModal, setAnalyzingModal] = useState(false)
   const [submittingLead, setSubmittingLead] = useState(false)
 
-  // Link Lead Modal
+  // Link Lead Modal State
   const [linkReview, setLinkReview] = useState<WhatsAppContactReview | null>(null)
-  const [leadSearch, setLeadSearch] = useState('')
   const [matchingLeads, setMatchingLeads] = useState<Array<{ id: string; name: string; phone: string }>>([])
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [submittingLink, setSubmittingLink] = useState(false)
@@ -73,11 +81,63 @@ export const ContactReviewPage: React.FC = () => {
     return () => { isMounted = false; clearTimeout(timer) }
   }, [currentWorkspace, statusTab])
 
-  const handleOpenCreateModal = (rev: WhatsAppContactReview) => {
+  const handleOpenCreateModal = async (rev: WhatsAppContactReview) => {
     setCreateReview(rev)
     setLeadName(rev.contact_name || formatPhoneNumber(rev.contact_phone))
+    setRequirement('')
+    setBudgetMin('')
+    setBudgetMax('')
+    setStage('new')
+    setPriority('warm')
     setAssignedAgent('')
+    setInitialNote('')
+    setCustomFieldsData({})
+    setMissingInfoList([])
+    setAnalysisId(null)
+    setSelectedSugIds([])
     setError(null)
+
+    if (currentWorkspace) {
+      setAnalyzingModal(true)
+      try {
+        const result = await aiIntelligenceApi.analyzeConversation({
+          workspace_id: currentWorkspace.id,
+          conversation_id: rev.conversation_id,
+          trigger_type: 'lead_review',
+        })
+        const ana = result.analysis
+        setAnalysisId(ana.id)
+        if (ana.requirement_summary) setRequirement(ana.requirement_summary)
+        if (ana.lead_temperature) setPriority(ana.lead_temperature === 'hot' ? 'hot' : ana.lead_temperature === 'cold' ? 'cold' : 'warm')
+        if (ana.missing_information && Array.isArray(ana.missing_information)) {
+          setMissingInfoList(ana.missing_information)
+        }
+        setSelectedSugIds(result.suggestions.filter((s) => s.status === 'pending').map((s) => s.id))
+
+        // Pre-fill extracted fields
+        const customObj: Record<string, unknown> = {}
+        result.suggestions.forEach((sug) => {
+          if (sug.suggestion_type === 'lead_field') {
+            if (sug.target_field === 'full_name' && sug.suggested_value) {
+              setLeadName(String(sug.suggested_value))
+            } else if (sug.target_field === 'requirement' && sug.suggested_value) {
+              setRequirement(String(sug.suggested_value))
+            } else if (sug.target_field === 'budget_max' && typeof sug.suggested_value === 'number') {
+              setBudgetMax(String(sug.suggested_value))
+            } else if (sug.target_field === 'budget_min' && typeof sug.suggested_value === 'number') {
+              setBudgetMin(String(sug.suggested_value))
+            }
+          } else if (sug.suggestion_type === 'custom_field' && sug.target_field) {
+            customObj[sug.target_field] = sug.suggested_value
+          }
+        })
+        setCustomFieldsData(customObj)
+      } catch (err) {
+        console.error('AI Auto-fill in modal error:', err)
+      } finally {
+        setAnalyzingModal(false)
+      }
+    }
   }
 
   const handleCreateLeadSubmit = async (e: React.FormEvent) => {
@@ -92,6 +152,15 @@ export const ContactReviewPage: React.FC = () => {
         review_id: createReview.id,
         lead_name: leadName.trim(),
         assigned_to: assignedAgent || undefined,
+        stage,
+        priority,
+        initial_note: initialNote.trim() || undefined,
+        requirement: requirement.trim() || undefined,
+        budget_min: budgetMin ? parseFloat(budgetMin) : undefined,
+        budget_max: budgetMax ? parseFloat(budgetMax) : undefined,
+        public_form_data: customFieldsData,
+        analysis_id: analysisId || undefined,
+        approved_suggestion_ids: selectedSugIds,
       })
 
       setCreateReview(null)
@@ -108,7 +177,6 @@ export const ContactReviewPage: React.FC = () => {
   const handleOpenLinkModal = async (rev: WhatsAppContactReview) => {
     setLinkReview(rev)
     setSelectedLeadId(null)
-    setLeadSearch('')
     setError(null)
 
     if (currentWorkspace) {
@@ -148,35 +216,33 @@ export const ContactReviewPage: React.FC = () => {
             </Link>
           </div>
           <h1 className="font-heading font-bold text-2xl text-navy-900 flex items-center gap-2">
-            <UserCheck className="w-6 h-6 text-brand-blue" />
-            Unknown Contact Reviews
+            WhatsApp Contact Reviews
           </h1>
           <p className="text-xs text-content-secondary mt-0.5">
-            Review incoming WhatsApp numbers that do not match existing leads. Convert them to new leads or link them cleanly.
+            Review inbound WhatsApp conversations, verify customer details, and convert into structured Leads.
           </p>
         </div>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-status-critical flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
           <span>{error}</span>
         </div>
       )}
 
-      {/* Status Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-surface-border text-xs font-semibold overflow-x-auto pb-1">
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-surface-border">
         {[
           { key: 'pending', label: 'Pending Review' },
-          { key: 'approved', label: 'Approved & Created' },
+          { key: 'approved', label: 'Approved (Leads Created)' },
           { key: 'linked', label: 'Linked to Existing' },
           { key: 'rejected', label: 'Rejected' },
           { key: 'spam', label: 'Spam' },
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setStatusTab(tab.key as never)}
-            className={`px-4 py-2.5 rounded-t-xl border-b-2 font-medium transition-all whitespace-nowrap ${
+            onClick={() => setStatusTab(tab.key as typeof statusTab)}
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-all ${
               statusTab === tab.key
                 ? 'border-brand-blue text-brand-blue bg-blue-50/50 font-bold'
                 : 'border-transparent text-content-secondary hover:text-navy-900 hover:bg-slate-50'
@@ -245,64 +311,138 @@ export const ContactReviewPage: React.FC = () => {
         )}
       </Card>
 
-      {/* CREATE LEAD MODAL */}
+      {/* CREATE LEAD MODAL WITH AI PRE-FILL */}
       {createReview && (
         <Modal
           isOpen={Boolean(createReview)}
           onClose={() => setCreateReview(null)}
           title="Create Lead from WhatsApp Contact"
-          subtitle={`Converting ${formatPhoneNumber(createReview.contact_phone)} into an active Lead`}
-          maxWidth="md"
+          subtitle={`Converting ${formatPhoneNumber(createReview.contact_phone)} into a structured Lead`}
+          maxWidth="lg"
         >
-          <form onSubmit={handleCreateLeadSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleCreateLeadSubmit} className="space-y-4 text-xs max-h-[80vh] overflow-y-auto pr-1">
             <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
               <div className="flex items-center space-x-2 text-indigo-900">
                 <Sparkles className="w-4 h-4 text-indigo-600" />
-                <span className="font-bold">AI Intelligence Pre-fill</span>
+                <span className="font-bold">AI Intelligence Pre-fill & Qualification</span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-xs bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-                onClick={async () => {
-                  if (!currentWorkspace || !createReview) return
-                  try {
-                    const result = await aiIntelligenceApi.analyzeConversation({
-                      workspace_id: currentWorkspace.id,
-                      conversation_id: createReview.conversation_id,
-                      trigger_type: 'lead_review',
-                    })
-                    if (result.analysis.customer_intent) {
-                      setLeadName(createReview.contact_name || result.analysis.customer_intent.slice(0, 30))
-                    }
-                  } catch {
-                    // fallback
-                  }
-                }}
-              >
-                Auto-fill with AI
-              </Button>
+              {analyzingModal && <span className="text-[11px] text-indigo-600 font-medium animate-pulse">Analyzing...</span>}
             </div>
 
-            <Input
-              label="Lead Name *"
-              value={leadName}
-              onChange={(e) => setLeadName(e.target.value)}
-              required
-            />
+            {/* Standard Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Lead Full Name *"
+                value={leadName}
+                onChange={(e) => setLeadName(e.target.value)}
+                required
+              />
 
-            <Select
-              label="Assign Lead Agent"
-              options={[
-                { value: '', label: 'Unassigned (Assign later)' },
-                ...teamMembers.map((m) => ({ value: m.userId, label: m.fullName })),
-              ]}
-              value={assignedAgent}
-              onChange={(e) => setAssignedAgent(e.target.value)}
-            />
+              <Select
+                label="Assign Lead Agent"
+                options={[
+                  { value: '', label: 'Unassigned (Assign later)' },
+                  ...teamMembers.map((m) => ({ value: m.userId, label: m.fullName })),
+                ]}
+                value={assignedAgent}
+                onChange={(e) => setAssignedAgent(e.target.value)}
+              />
 
-            <div className="flex justify-end gap-2 pt-2">
+              <div className="col-span-2">
+                <Input
+                  label="Requirement Summary"
+                  value={requirement}
+                  onChange={(e) => setRequirement(e.target.value)}
+                  placeholder="e.g. Needs 3BHK apartment in city center"
+                />
+              </div>
+
+              <Input
+                label="Min Budget"
+                type="number"
+                value={budgetMin}
+                onChange={(e) => setBudgetMin(e.target.value)}
+                placeholder="e.g. 10000"
+              />
+
+              <Input
+                label="Max Budget"
+                type="number"
+                value={budgetMax}
+                onChange={(e) => setBudgetMax(e.target.value)}
+                placeholder="e.g. 50000"
+              />
+
+              <Select
+                label="Stage"
+                options={[
+                  { value: 'new', label: 'New' },
+                  { value: 'contacted', label: 'Contacted' },
+                  { value: 'qualified', label: 'Qualified' },
+                  { value: 'property_shared', label: 'Property / Proposal Shared' },
+                  { value: 'viewing_scheduled', label: 'Viewing / Meeting Scheduled' },
+                  { value: 'negotiation', label: 'Negotiation' },
+                ]}
+                value={stage}
+                onChange={(e) => setStage(e.target.value)}
+              />
+
+              <Select
+                label="Priority / Temperature"
+                options={[
+                  { value: 'hot', label: '🔥 Hot' },
+                  { value: 'warm', label: '☀️ Warm' },
+                  { value: 'cold', label: '❄️ Cold' },
+                ]}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              />
+            </div>
+
+            {/* Custom Fields Extracted */}
+            {Object.keys(customFieldsData).length > 0 && (
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                <span className="font-bold text-slate-800 text-xs block">AI Extracted Custom Fields</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(customFieldsData).map(([key, val]) => (
+                    <div key={key} className="p-2 rounded bg-white border border-slate-200 text-xs">
+                      <span className="text-slate-500 block text-[10px] uppercase font-mono">{key}</span>
+                      <span className="font-semibold text-slate-900">{String(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Missing Details Warning Badges */}
+            {missingInfoList.length > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1.5">
+                <span className="font-bold text-amber-900 text-xs flex items-center gap-1">
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-600" /> Missing Qualification Details
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {missingInfoList.map((item, idx) => (
+                    <span key={idx} className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-medium">
+                      • {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Initial Note */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Note / Instructions</label>
+              <textarea
+                rows={2}
+                value={initialNote}
+                onChange={(e) => setInitialNote(e.target.value)}
+                className="w-full p-2 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-brand-blue"
+                placeholder="Internal notes for assigned agent..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
               <Button variant="outline" type="button" onClick={() => setCreateReview(null)} disabled={submittingLead}>
                 Cancel
               </Button>
@@ -320,44 +460,27 @@ export const ContactReviewPage: React.FC = () => {
           isOpen={Boolean(linkReview)}
           onClose={() => setLinkReview(null)}
           title="Link WhatsApp Contact to Existing Lead"
-          subtitle={`Select an existing lead for ${formatPhoneNumber(linkReview.contact_phone)}`}
+          subtitle={`Connecting ${formatPhoneNumber(linkReview.contact_phone)} to an existing CRM Lead`}
           maxWidth="md"
         >
           <form onSubmit={handleLinkLeadSubmit} className="space-y-4 text-xs">
-            <Input
-              placeholder="Filter leads by name or phone..."
-              value={leadSearch}
-              onChange={(e) => setLeadSearch(e.target.value)}
-              leftIcon={<Search className="w-4 h-4" />}
+            <Select
+              label="Select Existing Lead *"
+              options={[
+                { value: '', label: '-- Select Lead --' },
+                ...matchingLeads.map((l) => ({ value: l.id, label: `${l.name} (${l.phone || 'No phone'})` })),
+              ]}
+              value={selectedLeadId || ''}
+              onChange={(e) => setSelectedLeadId(e.target.value || null)}
+              required
             />
-
-            <div className="max-h-60 overflow-y-auto border border-surface-border rounded-xl divide-y divide-surface-border">
-              {matchingLeads
-                .filter((l) => l.name.toLowerCase().includes(leadSearch.toLowerCase()) || l.phone.includes(leadSearch))
-                .map((l) => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => setSelectedLeadId(l.id)}
-                    className={`w-full text-left p-3 flex items-center justify-between text-xs transition-colors ${
-                      selectedLeadId === l.id ? 'bg-blue-50 font-bold border-l-4 border-l-brand-blue' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-navy-900 block font-bold">{l.name}</span>
-                      <span className="text-[11px] text-content-secondary font-mono">{formatPhoneNumber(l.phone)}</span>
-                    </div>
-                    {selectedLeadId === l.id && <CheckCircle2 className="w-4 h-4 text-brand-blue" />}
-                  </button>
-                ))}
-            </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" type="button" onClick={() => setLinkReview(null)} disabled={submittingLink}>
                 Cancel
               </Button>
-              <Button variant="primary" type="submit" isLoading={submittingLink} disabled={!selectedLeadId} icon={<Link2 className="w-4 h-4" />}>
-                Link to Selected Lead
+              <Button variant="primary" type="submit" isLoading={submittingLink} disabled={!selectedLeadId} icon={<CheckCircle2 className="w-4 h-4" />}>
+                Link Contact
               </Button>
             </div>
           </form>

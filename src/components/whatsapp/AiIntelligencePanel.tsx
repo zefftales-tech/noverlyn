@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react'
 import {
   Sparkles,
   CheckCircle2,
-  XCircle,
-  AlertCircle,
   Copy,
   Send,
   RefreshCw,
@@ -12,18 +10,18 @@ import {
   Snowflake,
   HelpCircle,
   Target,
-  ArrowRight,
   ShieldCheck,
   ChevronRight,
   ChevronDown,
-  Layers,
   MessageSquare,
+  FileEdit,
 } from 'lucide-react'
 import {
   aiIntelligenceApi,
   type AiConversationAnalysis,
   type AiLeadSuggestion,
 } from '../../lib/aiIntelligenceApi'
+import { whatsappInboxApi } from '../../lib/whatsappInboxApi'
 
 interface AiIntelligencePanelProps {
   workspaceId: string
@@ -38,6 +36,8 @@ interface AiIntelligencePanelProps {
 export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
   workspaceId,
   conversationId,
+  contactName,
+  contactPhone,
   onInsertReply,
   onEvidenceClick,
   onCloseMobileDrawer,
@@ -47,10 +47,13 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
   const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [createFollowUp, setCreateFollowUp] = useState(true)
+  const [sendingReply, setSendingReply] = useState(false)
+  const [editableReplyText, setEditableReplyText] = useState('')
+  const [createFollowUp] = useState(true)
   const [activeTab, setActiveTab] = useState<'insights' | 'suggestions' | 'reply'>('insights')
   const [copiedReply, setCopiedReply] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
+    understood: true,
     summary: true,
     score: true,
     intent: true,
@@ -70,6 +73,7 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
         if (isCancelled) return
         if (latest) {
           setAnalysis(latest)
+          setEditableReplyText(latest.suggested_reply || '')
           const sugs = await aiIntelligenceApi.getSuggestions(latest.id)
           if (isCancelled) return
           setSuggestions(sugs)
@@ -77,6 +81,7 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
         } else {
           setAnalysis(null)
           setSuggestions([])
+          setEditableReplyText('')
         }
       } catch (err) {
         console.error('Failed to load AI analysis:', err)
@@ -104,11 +109,12 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
         force_reanalyze: force,
       })
       setAnalysis(result.analysis)
+      setEditableReplyText(result.analysis.suggested_reply || '')
       setSuggestions(result.suggestions)
       setSelectedSuggestionIds(result.suggestions.filter((s) => s.status === 'pending').map((s) => s.id))
     } catch (err) {
       console.error('Analysis failed:', err)
-      alert('Analysis failed. Please try again.')
+      alert('Analysis failed. Please ensure the AI Provider configuration is complete.')
     } finally {
       setLoading(false)
     }
@@ -123,13 +129,31 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
         suggestion_ids: selectedSuggestionIds,
         create_follow_up: createFollowUp,
       })
-      alert('Approved suggestions applied successfully!')
+      alert('Approved suggestions applied successfully to lead!')
       await handleRunAnalysis(true)
     } catch (err) {
       console.error('Apply failed:', err)
       alert('Failed to apply suggestions.')
     } finally {
       setApplying(false)
+    }
+  }
+
+  const handleSendReplyDirectly = async () => {
+    if (!editableReplyText.trim()) return
+    setSendingReply(true)
+    try {
+      await whatsappInboxApi.sendReplyMessage({
+        workspace_id: workspaceId,
+        conversation_id: conversationId,
+        text_body: editableReplyText.trim(),
+      })
+      alert('Reply sent successfully via WhatsApp!')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to send WhatsApp reply'
+      alert(`Error sending reply: ${msg}`)
+    } finally {
+      setSendingReply(false)
     }
   }
 
@@ -183,7 +207,7 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
             <h3 className="text-sm font-semibold text-white flex items-center">
               AI Intelligence Engine
             </h3>
-            <p className="text-xs text-slate-400">Multi-Industry Conversation Insights</p>
+            <p className="text-xs text-slate-400">Multi-Industry Customer Qualification</p>
           </div>
         </div>
 
@@ -199,382 +223,307 @@ export const AiIntelligencePanel: React.FC<AiIntelligencePanelProps> = ({
           {onCloseMobileDrawer && (
             <button
               onClick={onCloseMobileDrawer}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 lg:hidden"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
             >
-              <XCircle className="w-4 h-4" />
+              ✕
             </button>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-800 bg-slate-900/50 px-3 pt-2">
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-slate-800 bg-slate-900/50 p-1 text-xs">
         <button
           onClick={() => setActiveTab('insights')}
-          className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center space-x-1.5 ${
+          className={`flex-1 py-1.5 px-3 rounded-md font-medium transition-all ${
             activeTab === 'insights'
-              ? 'border-indigo-500 text-indigo-400 font-semibold'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Insights</span>
+          Insights
         </button>
-
         <button
           onClick={() => setActiveTab('suggestions')}
-          className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center space-x-1.5 ${
+          className={`flex-1 py-1.5 px-3 rounded-md font-medium transition-all relative ${
             activeTab === 'suggestions'
-              ? 'border-indigo-500 text-indigo-400 font-semibold'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Review ({suggestions.filter((s) => s.status === 'pending').length})</span>
+          Suggestions
+          {suggestions.filter((s) => s.status === 'pending').length > 0 && (
+            <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-slate-950 font-bold">
+              {suggestions.filter((s) => s.status === 'pending').length}
+            </span>
+          )}
         </button>
-
         <button
           onClick={() => setActiveTab('reply')}
-          className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center space-x-1.5 ${
+          className={`flex-1 py-1.5 px-3 rounded-md font-medium transition-all ${
             activeTab === 'reply'
-              ? 'border-indigo-500 text-indigo-400 font-semibold'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>Suggested Reply</span>
+          Suggested Reply
         </button>
       </div>
 
-      {/* Main Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
         {!analysis && !loading && (
-          <div className="text-center py-12 px-4 space-y-3">
-            <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+          <div className="py-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-indigo-400">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h4 className="text-sm font-semibold text-white">No AI Analysis Generated Yet</h4>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              Analyze recent WhatsApp messages to extract customer intent, lead score, missing information, and suggested replies.
+            <h4 className="text-sm font-medium text-white">No AI Analysis Yet</h4>
+            <p className="text-slate-400 max-w-xs mx-auto">
+              Run AI conversation intelligence to extract structured requirements, lead score, missing details, and qualification replies.
             </p>
             <button
               onClick={() => handleRunAnalysis(false)}
-              className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all"
+              className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-colors shadow-lg shadow-indigo-600/20"
             >
-              <Sparkles className="w-3.5 h-3.5 mr-2" /> Analyze Conversation
+              Analyze Conversation Now
             </button>
           </div>
         )}
 
         {loading && (
-          <div className="text-center py-12 space-y-3">
-            <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
-            <p className="text-xs text-slate-400">Analyzing conversation context & extracting structured insights...</p>
+          <div className="py-12 text-center space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
+            <p className="text-slate-300 font-medium">Analyzing WhatsApp Conversation...</p>
+            <p className="text-slate-500 text-[11px]">Extracting intent, requirement, budget, and qualification insights</p>
           </div>
         )}
 
         {analysis && !loading && (
           <>
-            {/* INSIGHTS TAB */}
+            {/* TAB 1: INSIGHTS */}
             {activeTab === 'insights' && (
               <div className="space-y-4">
-                {/* 1. Lead Score & Temperature */}
-                <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => toggleSection('score')}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Target className="w-4 h-4 text-indigo-400" />
-                      <span className="text-xs font-semibold text-white">Qualification & Urgency</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {renderTemperatureBadge(analysis.lead_temperature)}
-                      {expandedSections.score ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {expandedSections.score && (
-                    <div className="pt-2 border-t border-slate-700/40 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-400">Lead Qualification Score:</span>
-                        <span className="text-sm font-bold text-white">
-                          {analysis.lead_score ?? 50}/100
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-700/60 h-2 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            (analysis.lead_score ?? 0) >= 75
-                              ? 'bg-rose-500'
-                              : (analysis.lead_score ?? 0) >= 40
-                              ? 'bg-amber-500'
-                              : 'bg-sky-500'
-                          }`}
-                          style={{ width: `${analysis.lead_score ?? 50}%` }}
-                        />
-                      </div>
-                      {analysis.urgency && (
-                        <div className="text-xs text-slate-400 flex items-center justify-between">
-                          <span>Urgency Level:</span>
-                          <span className="font-semibold capitalize text-indigo-300">
-                            {analysis.urgency}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Customer Intent & Requirement */}
-                <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => toggleSection('intent')}
-                  >
-                    <span className="text-xs font-semibold text-white flex items-center">
-                      <HelpCircle className="w-4 h-4 text-emerald-400 mr-1.5" /> Customer Intent
+                {/* AI UNDERSTOOD CARD */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> AI Understood Context
                     </span>
-                    {expandedSections.intent ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                    )}
+                    {renderTemperatureBadge(analysis.lead_temperature)}
                   </div>
 
-                  {expandedSections.intent && (
-                    <div className="pt-2 border-t border-slate-700/40 space-y-2 text-xs">
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">Primary Intent:</span>
-                        <p className="text-slate-200 font-medium">
-                          {analysis.customer_intent || 'General inquiry'}
-                        </p>
-                      </div>
-                      {analysis.requirement_summary && (
-                        <div>
-                          <span className="text-slate-400 block mb-0.5">Requirement Summary:</span>
-                          <p className="text-slate-300 bg-slate-900/60 p-2 rounded border border-slate-800">
-                            {analysis.requirement_summary}
-                          </p>
-                        </div>
-                      )}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                      <span className="text-slate-400 block text-[10px]">Customer</span>
+                      <span className="font-semibold text-white">{contactName || contactPhone}</span>
                     </div>
-                  )}
+
+                    <div className="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                      <span className="text-slate-400 block text-[10px]">Lead Score</span>
+                      <span className="font-bold text-emerald-400 text-sm">{analysis.lead_score ?? 'N/A'}/100</span>
+                    </div>
+
+                    <div className="col-span-2 p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                      <span className="text-slate-400 block text-[10px]">Requirement</span>
+                      <span className="font-medium text-slate-200">{analysis.requirement_summary || 'Inquiry received'}</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* 3. Next Best Action */}
+                {/* RECOMMENDED NEXT ACTION */}
                 {analysis.recommended_next_action && (
-                  <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <ArrowRight className="w-4 h-4 text-indigo-400" />
-                      <span className="text-xs font-semibold text-indigo-200">
-                        Recommended Next Best Action
-                      </span>
-                    </div>
-                    <p className="text-xs text-white font-medium">
-                      {analysis.recommended_next_action}
-                    </p>
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
+                    <span className="font-bold text-amber-400 flex items-center gap-1 text-[11px]">
+                      <Target className="w-3.5 h-3.5" /> Recommended Next Action
+                    </span>
+                    <p className="text-slate-200 font-medium text-xs">{analysis.recommended_next_action}</p>
                     {analysis.recommended_action_reason && (
-                      <p className="text-xs text-indigo-300/80 italic">
-                        "{analysis.recommended_action_reason}"
-                      </p>
+                      <p className="text-slate-400 text-[10px]">{analysis.recommended_action_reason}</p>
                     )}
                   </div>
                 )}
 
-                {/* 4. Missing Information */}
-                {analysis.missing_information && analysis.missing_information.length > 0 && (
-                  <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/20 space-y-2">
-                    <div className="flex items-center space-x-1.5 text-amber-400">
-                      <AlertCircle className="w-4 h-4" />
-                      <span className="text-xs font-semibold">Missing Information</span>
-                    </div>
-                    <ul className="text-xs text-amber-200/90 space-y-1 pl-4 list-disc">
-                      {analysis.missing_information.map((item, idx) => (
-                        <li key={idx}>{item}</li>
+                {/* MISSING INFORMATION */}
+                {analysis.missing_information && Array.isArray(analysis.missing_information) && analysis.missing_information.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2">
+                    <button
+                      onClick={() => toggleSection('missing')}
+                      className="w-full flex items-center justify-between text-slate-300 font-semibold text-[11px]"
+                    >
+                      <span className="flex items-center gap-1.5 text-amber-400">
+                        <HelpCircle className="w-3.5 h-3.5" /> Missing Qualification Details ({analysis.missing_information.length})
+                      </span>
+                      {expandedSections.missing ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {expandedSections.missing && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {analysis.missing_information.map((item, idx) => (
+                          <span key={idx} className="px-2 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px]">
+                            • {item}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* BUYING SIGNALS */}
+                {analysis.buying_signals && Array.isArray(analysis.buying_signals) && analysis.buying_signals.length > 0 && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
+                    <span className="font-semibold text-emerald-400 flex items-center gap-1 text-[11px]">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Buying Signals
+                    </span>
+                    <ul className="space-y-1 text-[11px] text-slate-300">
+                      {analysis.buying_signals.map((signal, i) => (
+                        <li key={i} className="flex items-start gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{signal}</span>
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )}
-
-                {/* 5. Buying Signals & Objections */}
-                <div className="grid grid-cols-1 gap-2">
-                  {analysis.buying_signals && analysis.buying_signals.length > 0 && (
-                    <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-xs">
-                      <span className="font-semibold text-emerald-400 block mb-1">
-                        Buying Signals Detected:
-                      </span>
-                      <ul className="list-disc pl-4 text-emerald-200 space-y-0.5">
-                        {analysis.buying_signals.map((sig, i) => (
-                          <li key={i}>{sig}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {analysis.objections && analysis.objections.length > 0 && (
-                    <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/20 text-xs">
-                      <span className="font-semibold text-rose-400 block mb-1">
-                        Active Objections / Risks:
-                      </span>
-                      <ul className="list-disc pl-4 text-rose-200 space-y-0.5">
-                        {analysis.objections.map((obj, i) => (
-                          <li key={i}>{obj}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
-            {/* SUGGESTIONS TAB */}
+            {/* TAB 2: SUGGESTIONS */}
             {activeTab === 'suggestions' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">
-                    Select suggestions to approve & apply to Lead:
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="text-slate-400 font-medium text-[11px]">
+                    {suggestions.filter((s) => s.status === 'pending').length} Pending Suggestions
                   </span>
+                  <button
+                    onClick={handleApplySelected}
+                    disabled={applying || selectedSuggestionIds.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Apply Selected ({selectedSuggestionIds.length})
+                  </button>
                 </div>
 
-                <div className="space-y-2">
-                  {suggestions.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic text-center py-6">
-                      No pending suggestions for this analysis.
-                    </p>
-                  ) : (
-                    suggestions.map((sug) => (
-                      <div
-                        key={sug.id}
-                        className={`p-3 rounded-xl border transition-all text-xs space-y-2 ${
-                          selectedSuggestionIds.includes(sug.id)
-                            ? 'bg-indigo-950/30 border-indigo-500/50'
-                            : 'bg-slate-800/40 border-slate-700/50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <label className="flex items-center space-x-2 cursor-pointer font-semibold text-white">
+                {suggestions.length === 0 ? (
+                  <p className="text-center py-6 text-slate-500">No suggestions available.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {suggestions.map((sug) => {
+                      const isChecked = selectedSuggestionIds.includes(sug.id)
+                      return (
+                        <div
+                          key={sug.id}
+                          className={`p-3 rounded-xl border transition-all ${
+                            isChecked
+                              ? 'bg-slate-800/90 border-indigo-500/50 shadow-sm'
+                              : 'bg-slate-900/60 border-slate-800 opacity-75'
+                          }`}
+                        >
+                          <div className="flex items-start space-x-2.5">
                             <input
                               type="checkbox"
-                              checked={selectedSuggestionIds.includes(sug.id)}
+                              checked={isChecked}
+                              disabled={sug.status !== 'pending'}
                               onChange={() => toggleSuggestionSelection(sug.id)}
-                              className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                              className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-900"
                             />
-                            <span className="capitalize">{sug.target_field || sug.suggestion_type}</span>
-                          </label>
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-white capitalize text-xs">
+                                  {sug.target_field || sug.suggestion_type}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
+                                  {Math.round((sug.confidence || 0) * 100)}% confidence
+                                </span>
+                              </div>
 
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
-                            {Math.round(sug.confidence * 100)}% Confidence
-                          </span>
-                        </div>
+                              <p className="text-indigo-300 font-medium text-[11px]">
+                                {typeof sug.suggested_value === 'object'
+                                  ? JSON.stringify(sug.suggested_value)
+                                  : String(sug.suggested_value)}
+                              </p>
 
-                        <div className="bg-slate-900/60 p-2 rounded border border-slate-800 space-y-1">
-                          <div className="text-slate-300">
-                            <span className="text-slate-400">Suggested Value: </span>
-                            <span className="font-semibold text-indigo-300">
-                              {typeof sug.suggested_value === 'object'
-                                ? JSON.stringify(sug.suggested_value)
-                                : String(sug.suggested_value)}
-                            </span>
+                              {sug.evidence_text && (
+                                <p className="text-slate-400 text-[10px] italic">"{sug.evidence_text}"</p>
+                              )}
+
+                              {Array.isArray(sug.evidence_message_ids) && sug.evidence_message_ids.length > 0 && onEvidenceClick && (
+                                <button
+                                  type="button"
+                                  onClick={() => onEvidenceClick(sug.evidence_message_ids[0])}
+                                  className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-mono flex items-center gap-1 pt-1"
+                                >
+                                  🔍 Review Evidence Message
+                                </button>
+                              )}
+                            </div>
                           </div>
-
-                          {sug.evidence_text && (
-                            <p className="text-[11px] text-slate-400 italic">"{sug.evidence_text}"</p>
-                          )}
                         </div>
-
-                        {sug.evidence_message_ids && sug.evidence_message_ids.length > 0 && (
-                          <div className="flex items-center space-x-1 text-[10px] text-indigo-400">
-                            <span>Evidence Message ID:</span>
-                            <button
-                              onClick={() => onEvidenceClick?.(sug.evidence_message_ids[0])}
-                              className="underline hover:text-indigo-300"
-                            >
-                              {sug.evidence_message_ids[0].slice(0, 15)}...
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {suggestions.length > 0 && (
-                  <div className="pt-2 border-t border-slate-800 space-y-3">
-                    <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={createFollowUp}
-                        onChange={(e) => setCreateFollowUp(e.target.checked)}
-                        className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-900"
-                      />
-                      <span>Create recommended follow-up task on approval</span>
-                    </label>
-
-                    <button
-                      onClick={handleApplySelected}
-                      disabled={applying || selectedSuggestionIds.length === 0}
-                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
-                    >
-                      {applying ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                      <span>Approve Selected ({selectedSuggestionIds.length})</span>
-                    </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* SUGGESTED REPLY TAB */}
+            {/* TAB 3: SUGGESTED REPLY WORKFLOW */}
             {activeTab === 'reply' && (
               <div className="space-y-4">
-                {analysis.suggested_reply ? (
-                  <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-indigo-400 flex items-center">
-                        <Sparkles className="w-4 h-4 mr-1.5" /> AI Drafted Reply
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        Human-in-the-Loop Review
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-200 bg-slate-900/80 p-3 rounded-lg border border-slate-800 leading-relaxed font-sans">
-                      {analysis.suggested_reply}
-                    </p>
-
-                    <div className="flex items-center space-x-2 pt-1">
-                      <button
-                        onClick={() => copyReplyText(analysis.suggested_reply!)}
-                        className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center space-x-1.5 transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copiedReply ? 'Copied!' : 'Copy Reply'}</span>
-                      </button>
-
-                      {onInsertReply && (
-                        <button
-                          onClick={() => onInsertReply(analysis.suggested_reply!)}
-                          className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center justify-center space-x-1.5 transition-colors shadow-lg shadow-indigo-600/20"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>Insert into Chat</span>
-                        </button>
-                      )}
-                    </div>
+                <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/70 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-400" /> AI Suggested Reply
+                    </span>
+                    <button
+                      onClick={() => copyReplyText(editableReplyText)}
+                      className="text-slate-400 hover:text-white text-[11px] flex items-center gap-1"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      {copiedReply ? 'Copied!' : 'Copy'}
+                    </button>
                   </div>
-                ) : (
-                  <p className="text-xs text-slate-400 text-center py-6">
-                    No suggested reply available for this conversation.
-                  </p>
-                )}
+
+                  <textarea
+                    rows={4}
+                    value={editableReplyText}
+                    onChange={(e) => setEditableReplyText(e.target.value)}
+                    className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 leading-relaxed resize-y"
+                    placeholder="Suggested AI reply..."
+                  />
+
+                  {/* 4 PROFESSIONAL QUICK ACTIONS */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {onInsertReply && (
+                      <button
+                        type="button"
+                        onClick={() => onInsertReply(editableReplyText)}
+                        className="py-2 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium text-[11px] flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <FileEdit className="w-3.5 h-3.5 text-indigo-300" /> Insert Draft
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleSendReplyDirectly}
+                      disabled={sendingReply || !editableReplyText.trim()}
+                      className="py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 shadow-md shadow-indigo-600/20"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      {sendingReply ? 'Sending...' : 'Send After Review'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleApplySelected}
+                      disabled={applying || selectedSuggestionIds.length === 0}
+                      className="col-span-2 py-2 px-3 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Apply Lead Updates ({selectedSuggestionIds.length})
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </>

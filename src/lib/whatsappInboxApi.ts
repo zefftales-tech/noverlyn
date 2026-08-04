@@ -214,6 +214,13 @@ export const whatsappInboxApi = {
     assigned_to?: string | null
     stage?: string
     priority?: string
+    initial_note?: string | null
+    requirement?: string | null
+    budget_min?: number | null
+    budget_max?: number | null
+    public_form_data?: Record<string, unknown>
+    analysis_id?: string | null
+    approved_suggestion_ids?: string[]
   }): Promise<{ success: boolean; lead_id: string }> => {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured')
 
@@ -221,8 +228,15 @@ export const whatsappInboxApi = {
       p_review_id: params.review_id,
       p_lead_name: params.lead_name,
       p_assigned_to: params.assigned_to || null,
-      p_stage: params.stage || 'New',
-      p_priority: params.priority || 'Medium',
+      p_stage: params.stage || 'new',
+      p_priority: params.priority || 'warm',
+      p_initial_note: params.initial_note || null,
+      p_requirement: params.requirement || null,
+      p_budget_min: params.budget_min ?? null,
+      p_budget_max: params.budget_max ?? null,
+      p_public_form_data: params.public_form_data || {},
+      p_analysis_id: params.analysis_id || null,
+      p_approved_suggestion_ids: params.approved_suggestion_ids || [],
     } as never)
 
     if (error) {

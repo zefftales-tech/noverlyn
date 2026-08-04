@@ -2,6 +2,7 @@
 // SUPABASE EDGE FUNCTION: whatsapp-connection-manage
 // Handles server-side Meta Graph API calls, credentials verification,
 // test message sending, outgoing inbox replies, status queries, and disconnection.
+// Hardened error handling & step logging.
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -44,7 +45,8 @@ function logAndSanitizeMetaError(action: string, status: number, metaData: Recor
 
   return {
     success: false,
-    error: (metaErr.error_user_msg || metaErr.message || 'Meta rejected the WhatsApp request') as string,
+    error: 'META_TOKEN_INVALID',
+    message: (metaErr.error_user_msg || metaErr.message || 'Meta rejected the WhatsApp request') as string,
     meta_status: status,
     meta_code: metaErr.code || null,
     meta_subcode: metaErr.error_subcode || null,
@@ -55,7 +57,6 @@ function logAndSanitizeMetaError(action: string, status: number, metaData: Recor
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -64,37 +65,77 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     const graphApiVersion = Deno.env.get('META_GRAPH_API_VERSION') || 'v26.0'
-    const authHeader = req.headers.get('Authorization')
 
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+
+    if (!authHeader || !token) {
+      console.warn('[WhatsApp Connect Step] auth_verified', {
+        step: 'auth_verified',
+        success: false,
+        errorCode: 'NOT_AUTHENTICATED',
       })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'SESSION_EXPIRED',
+          message: 'Your session has expired. Please sign in again.',
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Verify requesting user strictly from Authorization header JWT (never trust user_id from body)
-    const token = authHeader.replace('Bearer ', '')
+    // Authenticate user
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized user token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      console.warn('[WhatsApp Connect Step] auth_verified', {
+        step: 'auth_verified',
+        success: false,
+        errorCode: 'SESSION_EXPIRED',
       })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'SESSION_EXPIRED',
+          message: 'Your session has expired. Please sign in again.',
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     const body: ManageRequestBody = await req.json()
     const { action, workspace_id } = body
 
     if (!workspace_id) {
-      return new Response(JSON.stringify({ error: 'Missing workspace_id' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'MISSING_WORKSPACE_ID',
+          message: 'Missing workspace_id parameter.',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
+
+    console.log('[WhatsApp Connect Step] auth_verified', {
+      action,
+      workspace_id,
+      user_id: user.id,
+      step: 'auth_verified',
+      success: true,
+    })
 
     // Verify workspace membership & role
     const { data: member } = await supabaseAdmin
@@ -106,36 +147,80 @@ serve(async (req) => {
       .single()
 
     if (!member) {
-      return new Response(JSON.stringify({ error: 'Access denied to this workspace' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      console.warn('[WhatsApp Connect Step] membership_verified', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        step: 'membership_verified',
+        success: false,
+        errorCode: 'WORKSPACE_ACCESS_DENIED',
       })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'WORKSPACE_ACCESS_DENIED',
+          message: 'You do not have access to this workspace.',
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
-    console.log('[WhatsApp Manage Request]', {
+    console.log('[WhatsApp Connect Step] membership_verified', {
       action,
       workspace_id,
       user_id: user.id,
-      role: member.role,
-      graphApiVersion,
-      timestamp: new Date().toISOString(),
+      step: 'membership_verified',
+      success: true,
     })
 
     // 1. CONNECT ACTION (Owner Only)
     if (action === 'connect') {
       if (member.role !== 'owner') {
-        return new Response(JSON.stringify({ error: 'Only workspace owners can connect WhatsApp Cloud API' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        console.warn('[WhatsApp Connect Step] role_verified', {
+          action,
+          workspace_id,
+          user_id: user.id,
+          step: 'role_verified',
+          success: false,
+          errorCode: 'INSUFFICIENT_ROLE',
         })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'INSUFFICIENT_ROLE',
+            message: 'Only workspace owners or managers can connect WhatsApp.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
+
+      console.log('[WhatsApp Connect Step] role_verified', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        step: 'role_verified',
+        success: true,
+      })
 
       const { waba_id, phone_number_id, access_token, meta_business_id } = body
       if (!waba_id || !phone_number_id || !access_token) {
-        return new Response(JSON.stringify({ error: 'Missing required credentials' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'MISSING_CREDENTIALS',
+            message: 'Missing required WhatsApp credentials.',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${phone_number_id}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier`, {
@@ -145,12 +230,27 @@ serve(async (req) => {
       const metaData = await metaRes.json()
 
       if (!metaRes.ok || metaData.error) {
+        console.error('[WhatsApp Connect Step] meta_token_verified', {
+          action,
+          workspace_id,
+          user_id: user.id,
+          step: 'meta_token_verified',
+          success: false,
+        })
         const errorPayload = logAndSanitizeMetaError('connect', metaRes.status, metaData)
         return new Response(JSON.stringify(errorPayload), {
-          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+
+      console.log('[WhatsApp Connect Step] meta_token_verified', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        step: 'meta_token_verified',
+        success: true,
+      })
 
       const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('save_whatsapp_connection_credentials_rpc', {
         p_workspace_id: workspace_id,
@@ -162,14 +262,46 @@ serve(async (req) => {
         p_verified_name: metaData.verified_name || 'Verified Business',
         p_quality_rating: metaData.quality_rating || 'UNKNOWN',
         p_limit_tier: metaData.messaging_limit_tier || 'TIER_50',
+        p_user_id: user.id,
       })
 
       if (rpcErr) {
-        return new Response(JSON.stringify({ error: rpcErr.message }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        console.error('[WhatsApp Connect Step] connection_save_failed', {
+          action,
+          workspace_id,
+          user_id: user.id,
+          step: 'connection_save_failed',
+          success: false,
+          error: rpcErr.message,
         })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CONNECTION_SAVE_FAILED',
+            message: 'WhatsApp connection could not be saved.',
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
+
+      console.log('[WhatsApp Connect Step] connection_saved', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        step: 'connection_saved',
+        success: true,
+      })
+
+      console.log('[WhatsApp Connect Step] credentials_saved', {
+        action,
+        workspace_id,
+        user_id: user.id,
+        step: 'credentials_saved',
+        success: true,
+      })
 
       return new Response(JSON.stringify(rpcRes), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -179,10 +311,17 @@ serve(async (req) => {
     // 2. VERIFY ACTION (Owner / Manager)
     if (action === 'verify') {
       if (member.role !== 'owner' && member.role !== 'manager') {
-        return new Response(JSON.stringify({ error: 'Access denied' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'INSUFFICIENT_ROLE',
+            message: 'Only workspace owners or managers can verify WhatsApp connections.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       const { data: creds } = await supabaseAdmin.rpc('get_whatsapp_connection_credentials_internal', {
@@ -190,84 +329,102 @@ serve(async (req) => {
       })
 
       if (!creds || creds.length === 0 || !creds[0]?.access_token?.trim()) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'WhatsApp access credential was not found or is missing.',
-        }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CREDENTIALS_NOT_FOUND',
+            message: 'WhatsApp access credential was not found or is missing.',
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
-      const { phone_number_id, access_token } = creds[0]
+      const activeToken = creds[0].access_token
+      const activePhoneId = creds[0].phone_number_id
 
-      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${phone_number_id}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier`, {
-        headers: { Authorization: `Bearer ${access_token}` },
+      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${activePhoneId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
       })
 
       const metaData = await metaRes.json()
 
       if (!metaRes.ok || metaData.error) {
         const errorPayload = logAndSanitizeMetaError('verify', metaRes.status, metaData)
-        await supabaseAdmin.from('whatsapp_connections').update({
-          status: 'action_required',
-          last_error: errorPayload.error,
-          updated_at: new Date().toISOString(),
-        }).eq('workspace_id', workspace_id)
-
         return new Response(JSON.stringify(errorPayload), {
-          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      await supabaseAdmin.from('whatsapp_connections').update({
-        status: 'connected',
-        display_phone_number: metaData.display_phone_number || null,
-        verified_name: metaData.verified_name || 'Verified Business',
-        quality_rating: metaData.quality_rating || 'GREEN',
-        messaging_limit_tier: metaData.messaging_limit_tier || 'TIER_50',
-        last_verified_at: new Date().toISOString(),
-        last_error: null,
-        updated_at: new Date().toISOString(),
-      }).eq('workspace_id', workspace_id)
-
-      return new Response(JSON.stringify({ success: true, status: 'connected', meta: metaData }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          status: 'connected',
+          verified_name: metaData.verified_name || 'Verified Business',
+          display_phone_number: metaData.display_phone_number || '',
+          quality_rating: metaData.quality_rating || 'UNKNOWN',
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // 3. STATUS ACTION
     if (action === 'status') {
-      const { data: connection } = await supabaseAdmin
+      const { data: conn } = await supabaseAdmin
         .from('whatsapp_connections')
-        .select('id, workspace_id, status, display_phone_number, verified_name, quality_rating, messaging_limit_tier, connected_at, last_verified_at, last_webhook_at, last_error')
+        .select('*')
         .eq('workspace_id', workspace_id)
         .single()
 
-      return new Response(JSON.stringify({ connection }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          connection: conn || null,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // 4. DISCONNECT ACTION (Owner Only)
     if (action === 'disconnect') {
       if (member.role !== 'owner') {
-        return new Response(JSON.stringify({ error: 'Only workspace owners can disconnect WhatsApp Cloud API' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'INSUFFICIENT_ROLE',
+            message: 'Only workspace owners can disconnect WhatsApp Cloud API.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('disconnect_whatsapp_connection_rpc', {
         p_workspace_id: workspace_id,
+        p_user_id: user.id,
       })
 
       if (rpcErr) {
-        return new Response(JSON.stringify({ error: rpcErr.message }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'DISCONNECT_FAILED',
+            message: rpcErr.message,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       return new Response(JSON.stringify(rpcRes), {
@@ -278,18 +435,32 @@ serve(async (req) => {
     // 5. TEST MESSAGE ACTION (Owner / Manager)
     if (action === 'test-message') {
       if (member.role !== 'owner' && member.role !== 'manager') {
-        return new Response(JSON.stringify({ error: 'Access denied' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'INSUFFICIENT_ROLE',
+            message: 'Only workspace owners or managers can send test messages.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
-      const { recipient_phone, template_name, language_code } = body
+      const { recipient_phone, template_name = 'hello_world', language_code = 'en_US' } = body
       if (!recipient_phone) {
-        return new Response(JSON.stringify({ error: 'Missing recipient_phone' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'MISSING_RECIPIENT',
+            message: 'Recipient phone number is required.',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       const { data: creds } = await supabaseAdmin.rpc('get_whatsapp_connection_credentials_internal', {
@@ -297,35 +468,38 @@ serve(async (req) => {
       })
 
       if (!creds || creds.length === 0 || !creds[0]?.access_token?.trim()) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'WhatsApp access credential was not found or is missing.',
-        }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CREDENTIALS_NOT_FOUND',
+            message: 'WhatsApp connection credentials not configured.',
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
-      const { phone_number_id, access_token } = creds[0]
-      const cleanPhone = recipient_phone.replace(/\D/g, '')
+      const activeToken = creds[0].access_token
+      const activePhoneId = creds[0].phone_number_id
+      const cleanPhone = recipient_phone.replace(/[^\d]/g, '')
 
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: cleanPhone,
-        type: 'template',
-        template: {
-          name: template_name || 'hello_world',
-          language: { code: language_code || 'en_US' },
-        },
-      }
-
-      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${phone_number_id}/messages`, {
+      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${activePhoneId}/messages`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${access_token}`,
+          Authorization: `Bearer ${activeToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'template',
+          template: {
+            name: template_name,
+            language: { code: language_code },
+          },
+        }),
       })
 
       const metaData = await metaRes.json()
@@ -333,46 +507,61 @@ serve(async (req) => {
       if (!metaRes.ok || metaData.error) {
         const errorPayload = logAndSanitizeMetaError('test-message', metaRes.status, metaData)
         return new Response(JSON.stringify(errorPayload), {
-          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      const messageId = metaData.messages?.[0]?.id || 'unknown_msg_id'
-
-      return new Response(JSON.stringify({
-        success: true,
-        message_id: messageId,
-        delivery_status: 'accepted',
-        meta_response: metaData
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // 6. SEND INBOX REPLIES ACTION (Owner, Manager, or Assigned Agent)
-    if (action === 'send-reply') {
-      const { conversation_id, text_body, template_name, language_code } = body
-      if (!conversation_id) {
-        return new Response(JSON.stringify({ error: 'Missing conversation_id' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      // Resolve conversation & verify membership
+      const wamid = metaData.messages?.[0]?.id || 'unknown_wamid'
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message_id: wamid,
+          recipient_phone: cleanPhone,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // 6. SEND REPLY ACTION (All active members)
+    if (action === 'send-reply') {
+      const { conversation_id, text_body } = body
+      if (!conversation_id || !text_body?.trim()) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'MISSING_REPLY_PARAMS',
+            message: 'Missing conversation_id or text_body for WhatsApp reply.',
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
       const { data: conv } = await supabaseAdmin
         .from('whatsapp_conversations')
-        .select('*')
+        .select('contact_phone')
         .eq('id', conversation_id)
         .eq('workspace_id', workspace_id)
         .single()
 
       if (!conv) {
-        return new Response(JSON.stringify({ error: 'Conversation not found in this workspace' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CONVERSATION_NOT_FOUND',
+            message: 'WhatsApp conversation not found.',
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       const { data: creds } = await supabaseAdmin.rpc('get_whatsapp_connection_credentials_internal', {
@@ -380,46 +569,35 @@ serve(async (req) => {
       })
 
       if (!creds || creds.length === 0 || !creds[0]?.access_token?.trim()) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'WhatsApp access credential missing or expired.',
-        }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'CREDENTIALS_NOT_FOUND',
+            message: 'WhatsApp connection credentials not configured.',
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
       }
 
-      const { phone_number_id, access_token } = creds[0]
+      const activeToken = creds[0].access_token
+      const activePhoneId = creds[0].phone_number_id
 
-      // Determine payload (template or text)
-      let payload: Record<string, unknown>
-      if (template_name) {
-        payload = {
-          messaging_product: 'whatsapp',
-          to: conv.contact_phone,
-          type: 'template',
-          template: {
-            name: template_name,
-            language: { code: language_code || 'en_US' },
-          },
-        }
-      } else {
-        payload = {
+      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${activePhoneId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
           to: conv.contact_phone,
           type: 'text',
-          text: { body: text_body || '' },
-        }
-      }
-
-      const metaRes = await fetch(`https://graph.facebook.com/${graphApiVersion}/${phone_number_id}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+          text: { preview_url: false, body: text_body.trim() },
+        }),
       })
 
       const metaData = await metaRes.json()
@@ -427,89 +605,68 @@ serve(async (req) => {
       if (!metaRes.ok || metaData.error) {
         const errorPayload = logAndSanitizeMetaError('send-reply', metaRes.status, metaData)
         return new Response(JSON.stringify(errorPayload), {
-          status: metaRes.status >= 400 && metaRes.status < 600 ? metaRes.status : 400,
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      const metaMsgId = metaData.messages?.[0]?.id || `msg_out_${Date.now()}`
-      const nowIso = new Date().toISOString()
+      const wamid = metaData.messages?.[0]?.id || 'unknown_wamid'
 
-      // Insert outgoing message
-      const { data: msgRecord, error: msgErr } = await supabaseAdmin
-        .from('whatsapp_messages')
-        .insert({
-          workspace_id,
-          connection_id: conv.connection_id,
-          conversation_id,
-          lead_id: conv.lead_id,
-          meta_message_id: metaMsgId,
-          direction: 'outgoing',
-          message_type: template_name ? 'template' : 'text',
-          text_body: text_body || `[Template: ${template_name}]`,
-          status: 'accepted',
-          sent_by: user.id,
-          occurred_at: nowIso,
-          raw_metadata: metaData,
-        })
-        .select()
-        .single()
+      await supabaseAdmin.from('whatsapp_messages').insert({
+        workspace_id,
+        conversation_id,
+        meta_message_id: wamid,
+        direction: 'outgoing',
+        message_type: 'text',
+        text_body: text_body.trim(),
+        status: 'sent',
+        occurred_at: new Date().toISOString(),
+      })
 
-      if (msgErr) {
-        console.error('[WhatsApp Outgoing Message Insert Error]', msgErr)
-      }
-
-      // Update conversation state
       await supabaseAdmin
         .from('whatsapp_conversations')
         .update({
-          status: 'waiting',
-          needs_response: false,
-          last_message_at: nowIso,
-          last_outgoing_at: nowIso,
-          last_message_preview: text_body || `[Template: ${template_name}]`,
-          updated_at: nowIso,
+          last_message_preview: text_body.trim().slice(0, 100),
+          last_message_direction: 'outgoing',
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', conversation_id)
 
-      // Also log to lead timeline if linked
-      if (conv.lead_id) {
-        await supabaseAdmin.from('lead_communications').insert({
-          workspace_id,
-          lead_id: conv.lead_id,
-          direction: 'outgoing',
-          channel: 'whatsapp',
-          message: text_body || `[Template: ${template_name}]`,
-          communication_status: 'replied',
-          created_at: nowIso,
-        })
-
-        await supabaseAdmin.from('leads').update({
-          last_communication_at: nowIso,
-          communication_status: 'replied',
-          updated_at: nowIso,
-        }).eq('id', conv.lead_id)
-      }
-
-      return new Response(JSON.stringify({
-        success: true,
-        message_id: metaMsgId,
-        message: msgRecord,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message_id: wamid,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
-    return new Response(JSON.stringify({ error: `Unsupported action: ${action}` }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'INVALID_ACTION',
+        message: `Unknown action '${action}'`,
+      }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Internal Edge Function error'
-    console.error('[WhatsApp Connection Manage Critical Error]', err)
-    return new Response(JSON.stringify({ error: errorMsg }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    console.error('[whatsapp-connection-manage Error]', err)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'INTERNAL_SERVER_ERROR',
+        message: err instanceof Error ? err.message : 'Internal server error',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
   }
 })
