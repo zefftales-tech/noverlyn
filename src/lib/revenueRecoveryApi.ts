@@ -41,7 +41,15 @@ export interface RevenueRecoveryItem {
   dismissed_at: string | null
   dismissed_by: string | null
   outcome: string | null
-  metadata: Record<string, unknown>
+  metadata: {
+    priority_score?: number
+    priority_band?: 'act_now' | 'high_priority' | 'follow_up_soon' | 'monitor'
+    priority_reason?: string
+    age_minutes?: number
+    lead_stage?: string
+    follow_up_id?: string
+    [key: string]: unknown
+  }
   created_at: string
   updated_at: string
   lead?: {
@@ -60,19 +68,17 @@ export interface RevenueRecoveryItem {
   } | null
 }
 
-export interface FollowUpSequence {
-  id: string
-  workspace_id: string
-  name: string
-  description: string | null
-  trigger_type: string
-  is_active: boolean
-  reply_mode: 'suggest_only' | 'approval_required' | 'controlled_auto_send'
-  maximum_steps: number
-  stop_on_customer_reply: boolean
-  stop_on_manual_takeover: boolean
-  created_at: string
-  updated_at: string
+export interface GroupedRecoveryCard {
+  group_key: string
+  customer_name: string
+  contact_phone: string | null
+  primary_item: RevenueRecoveryItem
+  all_items: RevenueRecoveryItem[]
+  highest_priority_score: number
+  priority_band: 'act_now' | 'high_priority' | 'follow_up_soon' | 'monitor'
+  priority_reason: string
+  estimated_value: number | null
+  has_possible_duplicates: boolean
 }
 
 export const revenueRecoveryApi = {
@@ -111,6 +117,55 @@ export const revenueRecoveryApi = {
     }
 
     return (data || []) as unknown as RevenueRecoveryItem[]
+  },
+
+  // Group Raw Items into One Card Per Customer/Lead
+  groupItemsByCustomer: (rawItems: RevenueRecoveryItem[]): GroupedRecoveryCard[] => {
+    const map = new Map<string, RevenueRecoveryItem[]>()
+
+    rawItems.forEach((item) => {
+      const key = item.lead_id || item.conversation_id || item.conversation?.contact_phone || item.id
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item)
+    })
+
+    const grouped: GroupedRecoveryCard[] = []
+
+    map.forEach((items, key) => {
+      // Sort items by priority score descending
+      items.sort((a, b) => {
+        const scoreA = a.metadata?.priority_score || (a.urgency === 'critical' ? 90 : a.urgency === 'high' ? 75 : 50)
+        const scoreB = b.metadata?.priority_score || (b.urgency === 'critical' ? 90 : b.urgency === 'high' ? 75 : 50)
+        return scoreB - scoreA
+      })
+
+      const primary = items[0]
+      const highestScore = primary.metadata?.priority_score || (primary.urgency === 'critical' ? 90 : primary.urgency === 'high' ? 75 : 50)
+
+      const band: 'act_now' | 'high_priority' | 'follow_up_soon' | 'monitor' =
+        primary.metadata?.priority_band ||
+        (highestScore >= 85 ? 'act_now' : highestScore >= 65 ? 'high_priority' : highestScore >= 40 ? 'follow_up_soon' : 'monitor')
+
+      const custName = primary.lead?.full_name || primary.conversation?.contact_name || primary.conversation?.contact_phone || 'Customer'
+      const phone = primary.lead?.phone || primary.conversation?.contact_phone || null
+      const maxVal = Math.max(...items.map((i) => i.estimated_value || 0))
+
+      grouped.push({
+        group_key: key,
+        customer_name: custName,
+        contact_phone: phone,
+        primary_item: primary,
+        all_items: items,
+        highest_priority_score: highestScore,
+        priority_band: band,
+        priority_reason: primary.metadata?.priority_reason || primary.reason,
+        estimated_value: maxVal > 0 ? maxVal : null,
+        has_possible_duplicates: false,
+      })
+    })
+
+    // Sort grouped cards by priority score descending
+    return grouped.sort((a, b) => b.highest_priority_score - a.highest_priority_score)
   },
 
   // Trigger Recovery Scan Edge Function

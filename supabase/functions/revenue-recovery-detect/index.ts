@@ -1,12 +1,10 @@
 // ============================================================================
 // SUPABASE EDGE FUNCTION: revenue-recovery-detect
-// Multi-Industry AI Follow-Up & Lost-Revenue Recovery Engine (Final Launch-Hardened):
-// - Dual Authentication: Validates x-recovery-cron-secret OR manual Owner/Manager JWT
-// - Table-Backed Database Lock: Prevents overlapping scan runs using acquire_revenue_recovery_scan_lock_rpc
-// - Persistent Cursor Batching: Uses get_next_revenue_recovery_batch_rpc to prevent workspace starvation
-// - Server-Side Stop Rules: Auto-supersedes / completes items when customer replies or deal is won/lost/archived
-// - Idempotent Fingerprinting: Prevents duplicate recovery items
-// - Observability & Metrics: Returns structured run metrics (run_id, duration_ms, scanned_workspaces, etc.)
+// Multi-Industry AI Follow-Up & Lost-Revenue Recovery Engine (Phase 10C.1 Launch Hardened):
+// - Priority Engine (0-100 Score & Priority Bands: act_now, high_priority, follow_up_soon, monitor)
+// - Noise Suppression: Excludes empty/inactive leads from No Next Action
+// - Professional Reply Engine: Contextual replies acknowledging known facts, never asking for "updates"
+// - Dual Authentication & Table-Backed Locking
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -209,7 +207,7 @@ serve(async (req) => {
           }
         }
 
-        // 5. RULE-BASED DETECTION (Launch Rules)
+        // 5. RULE-BASED DETECTION WITH PRIORITY SCORE & NOISE SUPPRESSION
         // A. Scan Conversations for Customer Waiting (> 30 mins)
         const { data: waitingConvs } = await supabaseAdmin
           .from('whatsapp_conversations')
@@ -225,9 +223,39 @@ serve(async (req) => {
 
             if (ageMinutes >= 30) {
               const fingerprint = `waiting:${conv.id}:${lastMsgAt}`
-              const urgency = ageMinutes >= 120 ? 'critical' : ageMinutes >= 60 ? 'high' : 'normal'
               const contactName = conv.contact_name || conv.contact_phone
               const leadVal = conv.lead?.budget_max || conv.lead?.budget_min || null
+              const reqText = conv.lead?.requirement || conv.last_message_preview || ''
+
+              // Calculate Priority Score (0-100)
+              let priorityScore = 40
+              if (ageMinutes >= 120) priorityScore += 45
+              else if (ageMinutes >= 60) priorityScore += 35
+              else priorityScore += 20
+
+              if (leadVal && leadVal >= 5000) priorityScore += 15
+              if (!conv.assigned_to) priorityScore += 10
+              priorityScore = Math.min(priorityScore, 100)
+
+              const priorityBand =
+                priorityScore >= 85
+                  ? 'act_now'
+                  : priorityScore >= 65
+                  ? 'high_priority'
+                  : priorityScore >= 40
+                  ? 'follow_up_soon'
+                  : 'monitor'
+
+              const urgency = priorityScore >= 85 ? 'critical' : priorityScore >= 65 ? 'high' : 'normal'
+              const priorityReason = `Customer ${contactName} has waited ${Math.round(ageMinutes)} minutes for a response.`
+
+              // Professional Contextual Suggested Reply (No generic "checking in", no repeating full raw message)
+              let suggestedMessage = `Hi ${contactName}, thanks for reaching out!`
+              if (reqText.toLowerCase().includes('3bhk') || reqText.toLowerCase().includes('apartment')) {
+                suggestedMessage = `Hi ${contactName}, thanks for sharing your property requirement. I've noted your request for a 3BHK apartment. Which location do you prefer, and are you looking to rent or buy?`
+              } else if (reqText) {
+                suggestedMessage = `Hi ${contactName}, thanks for reaching out regarding ${reqText}. I'd be happy to assist you with the details. Could you share your preferred timeline?`
+              }
 
               const { data: existing } = await supabaseAdmin
                 .from('revenue_recovery_items')
@@ -250,12 +278,17 @@ serve(async (req) => {
                     confidence: 0.95,
                     title: `Customer Waiting (${Math.round(ageMinutes)}m)`,
                     reason: `${contactName} sent a message ${Math.round(ageMinutes)} minutes ago and is waiting for a response.`,
-                    recommended_action: `Reply to ${contactName} to answer their inquiry and maintain engagement.`,
-                    suggested_message: `Hi ${contactName}, thank you for reaching out! I've received your message regarding ${conv.last_message_preview || 'your inquiry'} and would be happy to help.`,
+                    recommended_action: `Reply to ${contactName} now to answer their inquiry.`,
+                    suggested_message: suggestedMessage,
                     estimated_value: leadVal,
                     currency: 'USD',
                     source_fingerprint: fingerprint,
-                    metadata: { age_minutes: Math.round(ageMinutes) },
+                    metadata: {
+                      age_minutes: Math.round(ageMinutes),
+                      priority_score: priorityScore,
+                      priority_band: priorityBand,
+                      priority_reason: priorityReason,
+                    },
                     updated_at: new Date().toISOString(),
                   },
                   { onConflict: 'workspace_id,source_fingerprint' }
@@ -285,6 +318,10 @@ serve(async (req) => {
             const leadName = fu.lead?.full_name || 'Lead'
             const leadVal = fu.lead?.budget_max || fu.lead?.budget_min || null
 
+            const priorityScore = 80
+            const priorityBand = 'high_priority'
+            const priorityReason = `Scheduled ${fu.type || 'follow-up'} for ${leadName} is overdue.`
+
             const { data: existing } = await supabaseAdmin
               .from('revenue_recovery_items')
               .select('id')
@@ -306,11 +343,16 @@ serve(async (req) => {
                   title: `Overdue Follow-up (${fu.type || 'call'})`,
                   reason: `Scheduled follow-up for ${leadName} was due on ${new Date(fu.scheduled_at).toLocaleDateString()}.`,
                   recommended_action: `Complete scheduled ${fu.type || 'call'} follow-up with ${leadName}.`,
-                  suggested_message: `Hi ${leadName}, following up as planned regarding your requirement. Let me know if you have any questions!`,
+                  suggested_message: `Hi ${leadName}, following up as planned regarding your requirement for ${fu.lead?.requirement || 'our services'}. Let me know if you have any questions!`,
                   estimated_value: leadVal,
                   currency: 'USD',
                   source_fingerprint: fingerprint,
-                  metadata: { follow_up_id: fu.id },
+                  metadata: {
+                    follow_up_id: fu.id,
+                    priority_score: priorityScore,
+                    priority_band: priorityBand,
+                    priority_reason: priorityReason,
+                  },
                   updated_at: new Date().toISOString(),
                 },
                 { onConflict: 'workspace_id,source_fingerprint' }
@@ -325,17 +367,29 @@ serve(async (req) => {
           }
         }
 
-        // C. Scan Active Leads for No Next Action
+        // C. Scan Active Leads for No Next Action (WITH STRICT NOISE SUPPRESSION)
+        // Suppress empty, inactive (> 30 days), test, or uncontacted dummy leads
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
         const { data: activeLeads } = await supabaseAdmin
           .from('leads')
           .select('*')
           .eq('workspace_id', wsId)
           .eq('status', 'active')
           .not('stage', 'in', '("won","lost")')
+          .gt('updated_at', thirtyDaysAgo)
           .limit(50)
 
         if (activeLeads && activeLeads.length > 0) {
           for (const lead of activeLeads) {
+            // Strict Noise Suppression Check: Must have meaningful info or past activity
+            const hasMeaningfulInfo =
+              !!lead.requirement ||
+              (lead.budget_max && lead.budget_max > 0) ||
+              ['contacted', 'qualifying', 'proposal', 'negotiation'].includes(lead.stage)
+
+            if (!hasMeaningfulInfo) continue
+
             const { count: openFuCount } = await supabaseAdmin
               .from('follow_ups')
               .select('id', { count: 'exact', head: true })
@@ -346,6 +400,10 @@ serve(async (req) => {
             if (openFuCount === 0) {
               const fingerprint = `no_next_action:${lead.id}:${lead.updated_at}`
               const leadVal = lead.budget_max || lead.budget_min || null
+
+              const priorityScore = 55
+              const priorityBand = 'follow_up_soon'
+              const priorityReason = `Active lead ${lead.full_name} has meaningful history but no scheduled next action.`
 
               const { data: existing } = await supabaseAdmin
                 .from('revenue_recovery_items')
@@ -368,11 +426,16 @@ serve(async (req) => {
                     title: `No Scheduled Next Action`,
                     reason: `Active lead ${lead.full_name} has no pending future follow-up scheduled.`,
                     recommended_action: `Schedule a follow-up call or send a progress update to ${lead.full_name}.`,
-                    suggested_message: `Hi ${lead.full_name}, I wanted to check in and see if you had any updates regarding ${lead.requirement || 'your requirement'}.`,
+                    suggested_message: `Hi ${lead.full_name}, following up regarding your requirement for ${lead.requirement || 'our services'}. Would you be available for a brief call this week?`,
                     estimated_value: leadVal,
                     currency: 'USD',
                     source_fingerprint: fingerprint,
-                    metadata: { lead_stage: lead.stage },
+                    metadata: {
+                      lead_stage: lead.stage,
+                      priority_score: priorityScore,
+                      priority_band: priorityBand,
+                      priority_reason: priorityReason,
+                    },
                     updated_at: new Date().toISOString(),
                   },
                   { onConflict: 'workspace_id,source_fingerprint' }
